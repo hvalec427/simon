@@ -5,6 +5,7 @@ import { listCommand } from './commands/list.js';
 import { runningCommand } from './commands/running.js';
 import { stopCommand } from './commands/stop.js';
 import { preferCommand } from './commands/prefer.js';
+import { createCommand } from './commands/create.js';
 
 const program = new Command();
 
@@ -12,6 +13,13 @@ program
   .name('simon')
   .description('Manage iOS simulators and Android emulators')
   .version('1.0.0');
+
+program
+  .command('create')
+  .description('Create a new simulator or emulator')
+  .option('-i, --ios', 'Create an iOS simulator')
+  .option('-a, --android', 'Create an Android emulator')
+  .action(createCommand);
 
 program
   .command('launch')

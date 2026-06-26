@@ -1,20 +1,40 @@
 import { execSync, spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
-function findBin(name: 'emulator' | 'adb'): string {
-  const sdkRoot =
+function getSdkRoot(): string {
+  return (
     process.env.ANDROID_HOME ||
     process.env.ANDROID_SDK_ROOT ||
-    path.join(homedir(), 'Library', 'Android', 'sdk');
-
-  const subdir = name === 'emulator' ? 'emulator' : 'platform-tools';
-  const full = path.join(sdkRoot, subdir, name);
-
-  if (existsSync(full)) return full;
-  return name; // fall back to PATH
+    path.join(homedir(), 'Library', 'Android', 'sdk')
+  );
 }
+
+function findBin(name: 'emulator' | 'adb'): string {
+  const subdir = name === 'emulator' ? 'emulator' : 'platform-tools';
+  const full = path.join(getSdkRoot(), subdir, name);
+  return existsSync(full) ? full : name;
+}
+
+function findAvdManager(): string {
+  const sdk = getSdkRoot();
+  const candidates = [
+    path.join(sdk, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
+    // versioned installs: cmdline-tools/X.X/bin/
+    ...(() => {
+      const dir = path.join(sdk, 'cmdline-tools');
+      if (!existsSync(dir)) return [];
+      return readdirSync(dir)
+        .filter(v => v !== 'latest')
+        .map(v => path.join(dir, v, 'bin', 'avdmanager'));
+    })(),
+    path.join(sdk, 'tools', 'bin', 'avdmanager'),
+  ];
+  return candidates.find(p => existsSync(p)) ?? 'avdmanager';
+}
+
+// ── List ──────────────────────────────────────────────────────────────────────
 
 export function listAvds(): string[] {
   try {
@@ -25,7 +45,76 @@ export function listAvds(): string[] {
   }
 }
 
-interface RunningEmulator {
+export interface DeviceDefinition {
+  id: string;
+  name: string;
+}
+
+export function listDeviceDefinitions(): DeviceDefinition[] {
+  try {
+    const out = execSync(`"${findAvdManager()}" list device 2>/dev/null`, { encoding: 'utf8' });
+    const devices: DeviceDefinition[] = [];
+    const SKIP = ['automotive', 'tv_', 'glass', 'wear', 'desktop', 'chromebook'];
+
+    let currentId: string | null = null;
+    for (const line of out.split('\n')) {
+      const idMatch = line.match(/^id:\s+\d+\s+or\s+"([^"]+)"/);
+      if (idMatch) { currentId = idMatch[1]; continue; }
+
+      const nameMatch = line.match(/^\s+Name:\s+(.+)$/);
+      if (nameMatch && currentId) {
+        if (!SKIP.some(s => currentId!.startsWith(s))) {
+          devices.push({ id: currentId, name: nameMatch[1].trim() });
+        }
+        currentId = null;
+      }
+    }
+    return devices;
+  } catch {
+    return [];
+  }
+}
+
+export interface SystemImage {
+  api: string;
+  variant: string;
+  arch: string;
+  package: string;
+  label: string;
+}
+
+export function listInstalledSystemImages(): SystemImage[] {
+  const sysImagesDir = path.join(getSdkRoot(), 'system-images');
+  if (!existsSync(sysImagesDir)) return [];
+
+  const images: SystemImage[] = [];
+  try {
+    for (const apiDir of readdirSync(sysImagesDir)) {
+      const apiPath = path.join(sysImagesDir, apiDir);
+      if (!statSync(apiPath).isDirectory()) continue;
+      for (const variant of readdirSync(apiPath)) {
+        const variantPath = path.join(apiPath, variant);
+        if (!statSync(variantPath).isDirectory()) continue;
+        for (const arch of readdirSync(variantPath)) {
+          const api = apiDir.replace('android-', '');
+          images.push({
+            api,
+            variant,
+            arch,
+            package: `system-images;${apiDir};${variant};${arch}`,
+            label: `API ${api}  ${variant}  (${arch})`,
+          });
+        }
+      }
+    }
+  } catch {}
+
+  return images.sort((a, b) => parseInt(b.api) - parseInt(a.api));
+}
+
+// ── Running ───────────────────────────────────────────────────────────────────
+
+export interface RunningEmulator {
   serial: string;
   name: string;
 }
@@ -59,6 +148,8 @@ export function runningAvdNames(): string[] {
   return runningEmulators().map(e => e.name);
 }
 
+// ── Actions ───────────────────────────────────────────────────────────────────
+
 export function launchAvd(name: string): void {
   const child = spawn(findBin('emulator'), ['-avd', name], {
     detached: true,
@@ -68,6 +159,13 @@ export function launchAvd(name: string): void {
 }
 
 export function stopEmulator(serial: string): void {
-  const adb = findBin('adb');
-  execSync(`"${adb}" -s ${serial} emu kill 2>/dev/null`);
+  execSync(`"${findBin('adb')}" -s ${serial} emu kill 2>/dev/null`);
+}
+
+export function createAvd(name: string, deviceId: string, systemImage: string): void {
+  // `echo no` skips the custom hardware profile prompt
+  execSync(
+    `echo no | "${findAvdManager()}" create avd -n "${name}" -k "${systemImage}" -d "${deviceId}" 2>&1`,
+    { encoding: 'utf8' }
+  );
 }

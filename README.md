@@ -20,6 +20,8 @@ Or download the binary directly from the [latest release](https://github.com/hva
 
 | Command | Description |
 |---|---|
+| `simon create -i` | Create a new iOS simulator (interactive) |
+| `simon create -a` | Create a new Android emulator (interactive) |
 | `simon launch -i` | Launch iOS simulator (uses preferred, or interactive picker) |
 | `simon launch -a` | Launch Android emulator (uses preferred, or interactive picker) |
 | `simon launch -i "iPhone 16"` | Launch a specific iOS simulator by name |

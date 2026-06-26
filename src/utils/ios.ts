@@ -7,6 +7,17 @@ export interface Simulator {
   runtime: string;
 }
 
+export interface DeviceType {
+  name: string;
+  identifier: string;
+}
+
+export interface Runtime {
+  name: string;
+  identifier: string;
+  version: string;
+}
+
 interface SimctlDevice {
   name: string;
   udid: string;
@@ -39,6 +50,30 @@ export function listSimulators(): Simulator[] {
   }
 }
 
+export function listDeviceTypes(): DeviceType[] {
+  try {
+    const out = execSync('xcrun simctl list devicetypes --json', { encoding: 'utf8' });
+    const data = JSON.parse(out) as { devicetypes: { name: string; identifier: string }[] };
+    return data.devicetypes.filter(
+      d => d.name.includes('iPhone') || d.name.includes('iPad')
+    );
+  } catch {
+    return [];
+  }
+}
+
+export function listRuntimes(): Runtime[] {
+  try {
+    const out = execSync('xcrun simctl list runtimes --json', { encoding: 'utf8' });
+    const data = JSON.parse(out) as {
+      runtimes: { name: string; identifier: string; version: string; isAvailable: boolean }[];
+    };
+    return data.runtimes.filter(r => r.isAvailable && r.name.includes('iOS'));
+  } catch {
+    return [];
+  }
+}
+
 export function bootSimulator(udid: string): void {
   try {
     execSync(`xcrun simctl boot "${udid}" 2>/dev/null`);
@@ -50,6 +85,13 @@ export function bootSimulator(udid: string): void {
 
 export function shutdownSimulator(udid: string): void {
   execSync(`xcrun simctl shutdown "${udid}" 2>/dev/null`);
+}
+
+export function createSimulator(name: string, deviceType: string, runtime: string): string {
+  const out = execSync(`xcrun simctl create "${name}" "${deviceType}" "${runtime}"`, {
+    encoding: 'utf8',
+  });
+  return out.trim();
 }
 
 export function runningSimulators(): Simulator[] {
