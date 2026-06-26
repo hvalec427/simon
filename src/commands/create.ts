@@ -74,7 +74,7 @@ async function createAndroid(): Promise<void> {
 
   const name = await input({
     message: 'Emulator name:',
-    default: `${device.name} API ${image.api}`,
+    default: `${device.name} API ${image.api}`.replace(/\s+/g, '_'),
     validate: v => (v.includes(' ') ? 'AVD names cannot contain spaces' : true),
   });
 
