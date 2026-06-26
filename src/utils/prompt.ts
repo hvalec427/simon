@@ -15,6 +15,7 @@ export async function selectWithExit<T>(
   try {
     const result = await (select as any)({
       message,
+      loop: false,
       choices: [
         ...choices,
         new Separator(),
