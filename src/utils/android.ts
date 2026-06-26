@@ -162,6 +162,10 @@ export function stopEmulator(serial: string): void {
   execSync(`"${findBin('adb')}" -s ${serial} emu kill 2>/dev/null`);
 }
 
+export function openUrlOnEmulator(serial: string, url: string): void {
+  execSync(`"${findBin('adb')}" -s ${serial} shell am start -a android.intent.action.VIEW -d "${url}"`);
+}
+
 export function deleteAvd(name: string): void {
   execSync(`"${findAvdManager()}" delete avd -n "${name}"`);
 }

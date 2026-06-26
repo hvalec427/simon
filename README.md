@@ -34,6 +34,10 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon list -i` | List iOS simulators |
 | `simon list -a` | List Android emulators |
 | `simon running` | Show what's currently running |
+| `simon open-link <url>` | Open a deep link on a running device (picker if multiple) |
+| `simon open-link <url> -i` | Open on a running iOS simulator |
+| `simon open-link <url> -a` | Open on a running Android emulator |
+| `simon open-link <url> -i "iPhone 16"` | Open on a specific running simulator |
 | `simon prefer -i` | Set your preferred iOS simulator |
 | `simon prefer -a` | Set your preferred Android emulator |
 | `simon prefer` | Show current preferred settings |

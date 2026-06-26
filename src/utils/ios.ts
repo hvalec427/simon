@@ -91,6 +91,10 @@ export function deleteSimulator(udid: string): void {
   execSync(`xcrun simctl delete "${udid}"`);
 }
 
+export function openUrlOnSimulator(udid: string, url: string): void {
+  execSync(`xcrun simctl openurl "${udid}" "${url}"`);
+}
+
 export function createSimulator(name: string, deviceType: string, runtime: string): string {
   const out = execSync(`xcrun simctl create "${name}" "${deviceType}" "${runtime}"`, {
     encoding: 'utf8',

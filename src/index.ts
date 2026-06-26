@@ -7,6 +7,7 @@ import { stopCommand } from './commands/stop.js';
 import { preferCommand } from './commands/prefer.js';
 import { createCommand } from './commands/create.js';
 import { deleteCommand } from './commands/delete.js';
+import { openLinkCommand } from './commands/open-link.js';
 
 const program = new Command();
 
@@ -50,6 +51,13 @@ program
   .option('-i, --ios', 'Set preferred iOS simulator')
   .option('-a, --android', 'Set preferred Android emulator')
   .action(preferCommand);
+
+program
+  .command('open-link <url>')
+  .description('Open a deep link on a running simulator or emulator')
+  .option('-i, --ios [name]', 'Open on iOS simulator')
+  .option('-a, --android [name]', 'Open on Android emulator')
+  .action(openLinkCommand);
 
 program
   .command('list')
