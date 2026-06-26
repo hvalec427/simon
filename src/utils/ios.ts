@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { exec, execSync, spawn } from 'child_process';
 import { readFileSync } from 'fs';
 
 export interface Simulator {
@@ -139,6 +139,51 @@ export function openUrlOnPhysicalIos(udid: string, url: string): void {
 
 export function runningSimulators(): Simulator[] {
   return listSimulators().filter(s => s.state === 'Booted');
+}
+
+function execAsync(cmd: string): Promise<string> {
+  return new Promise(resolve => {
+    exec(cmd, (err, stdout) => resolve(err ? '' : stdout));
+  });
+}
+
+export async function getRunningIosDevicesAsync(): Promise<{
+  simulators: Simulator[];
+  physical: PhysicalIosDevice[];
+}> {
+  const [simOut, devicectlOut] = await Promise.all([
+    execAsync('xcrun simctl list devices --json 2>/dev/null'),
+    execAsync(`xcrun devicectl list devices --json-output /tmp/simon-devicectl-async.json 2>/dev/null`),
+  ]);
+
+  const simulators: Simulator[] = [];
+  try {
+    const data = JSON.parse(simOut) as { devices: Record<string, SimctlDevice[]> };
+    for (const [runtime, devices] of Object.entries(data.devices)) {
+      const label = runtime
+        .replace('com.apple.CoreSimulator.SimRuntime.', '')
+        .replace(/-/g, ' ')
+        .replace(/(\w+)\s(\d+)\s(\d+)/, '$1 $2.$3');
+      for (const d of devices) {
+        if (d.isAvailable && d.state === 'Booted')
+          simulators.push({ name: d.name, udid: d.udid, state: d.state, runtime: label });
+      }
+    }
+  } catch {}
+
+  let physical: PhysicalIosDevice[] = [];
+  try {
+    const data = JSON.parse(readFileSync('/tmp/simon-devicectl-async.json', 'utf8'));
+    physical = (data.result?.devices ?? [])
+      .filter((d: any) => d.connectionProperties?.transportType)
+      .map((d: any) => ({
+        name: d.deviceProperties?.name ?? d.hardwareProperties?.marketingName ?? 'Unknown',
+        udid: d.hardwareProperties?.udid ?? d.identifier,
+        osVersion: d.deviceProperties?.osVersionNumber ?? '',
+      }));
+  } catch {}
+
+  return { simulators, physical };
 }
 
 export function takeScreenshot(udid: string, outputPath: string): void {

@@ -1,6 +1,6 @@
 import chalk from 'chalk';
-import { connectedAndroidDevices, runningEmulators } from './android.js';
-import { listPhysicalIosDevices, runningSimulators } from './ios.js';
+import { getRunningAndroidDevicesAsync } from './android.js';
+import { getRunningIosDevicesAsync } from './ios.js';
 import { selectWithExit } from './prompt.js';
 
 export type RunningDevice =
@@ -9,24 +9,18 @@ export type RunningDevice =
   | { platform: 'android'; kind: 'emulator'; name: string; serial: string }
   | { platform: 'android'; kind: 'physical'; name: string; serial: string };
 
-export function getAllRunningDevices(filter?: 'ios' | 'android'): RunningDevice[] {
-  const devices: RunningDevice[] = [];
+export async function getAllRunningDevices(filter?: 'ios' | 'android'): Promise<RunningDevice[]> {
+  const [ios, android] = await Promise.all([
+    filter !== 'android' ? getRunningIosDevicesAsync() : { simulators: [], physical: [] },
+    filter !== 'ios' ? getRunningAndroidDevicesAsync() : { emulators: [], physical: [] },
+  ]);
 
-  if (!filter || filter === 'ios') {
-    for (const s of runningSimulators())
-      devices.push({ platform: 'ios', kind: 'simulator', name: s.name, udid: s.udid, runtime: s.runtime });
-    for (const d of listPhysicalIosDevices())
-      devices.push({ platform: 'ios', kind: 'physical', name: d.name, udid: d.udid, osVersion: d.osVersion });
-  }
-
-  if (!filter || filter === 'android') {
-    for (const e of runningEmulators())
-      devices.push({ platform: 'android', kind: 'emulator', name: e.name, serial: e.serial });
-    for (const d of connectedAndroidDevices())
-      devices.push({ platform: 'android', kind: 'physical', name: d.name, serial: d.serial });
-  }
-
-  return devices;
+  return [
+    ...ios.simulators.map(s => ({ platform: 'ios' as const, kind: 'simulator' as const, name: s.name, udid: s.udid, runtime: s.runtime })),
+    ...ios.physical.map(d => ({ platform: 'ios' as const, kind: 'physical' as const, name: d.name, udid: d.udid, osVersion: d.osVersion })),
+    ...android.emulators.map(e => ({ platform: 'android' as const, kind: 'emulator' as const, name: e.name, serial: e.serial })),
+    ...android.physical.map(d => ({ platform: 'android' as const, kind: 'physical' as const, name: d.name, serial: d.serial })),
+  ];
 }
 
 export function deviceLabel(d: RunningDevice): string {
@@ -43,7 +37,7 @@ export async function pickRunningDevice(
   filter?: 'ios' | 'android',
   name?: string,
 ): Promise<RunningDevice> {
-  const devices = getAllRunningDevices(filter);
+  const devices = await getAllRunningDevices(filter);
 
   if (devices.length === 0) {
     const what = filter === 'ios'

@@ -1,4 +1,4 @@
-import { execSync, spawn } from 'child_process';
+import { exec, execSync, spawn } from 'child_process';
 import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
@@ -176,6 +176,40 @@ export function runningEmulators(): RunningEmulator[] {
 
 export function runningAvdNames(): string[] {
   return runningEmulators().map(e => e.name);
+}
+
+function execAsync(cmd: string, timeout = 3000): Promise<string> {
+  return new Promise(resolve => {
+    exec(cmd, { timeout }, (err, stdout) => resolve(err ? '' : stdout));
+  });
+}
+
+export async function getRunningAndroidDevicesAsync(): Promise<{
+  emulators: RunningEmulator[];
+  physical: PhysicalAndroidDevice[];
+}> {
+  const adb = findBin('adb');
+  try {
+    const out = execSync(`"${adb}" devices 2>/dev/null`, { encoding: 'utf8' });
+    const lines = out.split('\n').filter(l => l.includes('\tdevice'));
+    const emulatorSerials = lines.filter(l => l.startsWith('emulator-')).map(l => l.split('\t')[0].trim());
+    const physicalSerials = lines.filter(l => !l.startsWith('emulator-')).map(l => l.split('\t')[0].trim()).filter(Boolean);
+
+    const [emulators, physical] = await Promise.all([
+      Promise.all(emulatorSerials.map(async serial => {
+        const out = await execAsync(`"${adb}" -s ${serial} emu avd name 2>/dev/null`);
+        return { serial, name: out.trim().split('\n')[0].trim() || serial };
+      })),
+      Promise.all(physicalSerials.map(async serial => {
+        const out = await execAsync(`"${adb}" -s ${serial} shell getprop ro.product.model 2>/dev/null`);
+        return { serial, name: out.trim() || serial };
+      })),
+    ]);
+
+    return { emulators, physical };
+  } catch {
+    return { emulators: [], physical: [] };
+  }
 }
 
 // ── Actions ───────────────────────────────────────────────────────────────────
