@@ -28,7 +28,8 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          PREV=$(git tag --sort=-version:refname | head -1)
+          CURRENT="${{ steps.version.outputs.value }}"
+          PREV=$(git tag --sort=-version:refname | grep -v "^${CURRENT}$" | head -1)
           if [ -n "$PREV" ]; then
             LOG=$(git log "${PREV}..HEAD" --pretty=format:"- %s" --no-merges)
           else
