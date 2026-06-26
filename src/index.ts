@@ -26,6 +26,7 @@ program
   .description('Launch a simulator or emulator')
   .option('-i, --ios [name]', 'iOS simulator to launch (interactive if no name given)')
   .option('-a, --android [name]', 'Android emulator to launch (interactive if no name given)')
+  .option('-p, --pick', 'Always show the interactive picker, ignoring preferred')
   .action(launchCommand);
 
 program
