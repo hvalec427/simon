@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
-    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=bundle.cjs",
+    "bundle": "node scripts/bundle.mjs",
     "build:binary": "npm run bundle && pkg bundle.cjs --targets node22-macos-arm64,node22-macos-x64 --out-path bin",
     "dev": "tsx src/index.ts",
     "prepublishOnly": "npm run build"

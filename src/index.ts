@@ -1,8 +1,5 @@
 #!/usr/bin/env node
-import { createRequire } from 'module';
 import { Command } from 'commander';
-
-const { version } = createRequire(import.meta.url)('../package.json') as { version: string };
 import { launchCommand } from './commands/launch.js';
 import { listCommand } from './commands/list.js';
 import { runningCommand } from './commands/running.js';
@@ -21,7 +18,7 @@ const program = new Command();
 program
   .name('simon')
   .description('Manage iOS simulators and Android emulators')
-  .version(version, '-v, --version');
+  .version(process.env.npm_package_version ?? 'unknown', '-v, --version');
 
 program
   .command('create')
