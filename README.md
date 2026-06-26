@@ -49,8 +49,11 @@ Physical devices are shown in `simon list` and `simon running`, and work with `s
 - **Android**: plug in via USB — detected automatically via `adb`
 - **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (Xcode 15+). Opening deep links on physical iOS devices requires `idb`:
   ```sh
+  brew tap facebook/fb
   brew install idb-companion
-  pip3 install fb-idb
+  brew install pipx
+  pipx ensurepath
+  pipx install fb-idb
   ```
 
 ## Requirements
