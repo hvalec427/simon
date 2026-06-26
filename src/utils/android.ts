@@ -21,7 +21,6 @@ function findAvdManager(): string {
   const sdk = getSdkRoot();
   const candidates = [
     path.join(sdk, 'cmdline-tools', 'latest', 'bin', 'avdmanager'),
-    // versioned installs: cmdline-tools/X.X/bin/
     ...(() => {
       const dir = path.join(sdk, 'cmdline-tools');
       if (!existsSync(dir)) return [];
@@ -112,6 +111,37 @@ export function listInstalledSystemImages(): SystemImage[] {
   return images.sort((a, b) => parseInt(b.api) - parseInt(a.api));
 }
 
+export interface PhysicalAndroidDevice {
+  serial: string;
+  name: string;
+}
+
+export function connectedAndroidDevices(): PhysicalAndroidDevice[] {
+  const adb = findBin('adb');
+  try {
+    const out = execSync(`"${adb}" devices 2>/dev/null`, { encoding: 'utf8' });
+    const serials = out
+      .split('\n')
+      .filter(l => !l.startsWith('emulator-') && l.includes('\tdevice'))
+      .map(l => l.split('\t')[0].trim())
+      .filter(Boolean);
+
+    return serials.map(serial => {
+      try {
+        const model = execSync(`"${adb}" -s ${serial} shell getprop ro.product.model 2>/dev/null`, {
+          encoding: 'utf8',
+          timeout: 3000,
+        });
+        return { serial, name: model.trim() || serial };
+      } catch {
+        return { serial, name: serial };
+      }
+    });
+  } catch {
+    return [];
+  }
+}
+
 // ── Running ───────────────────────────────────────────────────────────────────
 
 export interface RunningEmulator {
@@ -170,7 +200,6 @@ export function launchAvd(name: string): void {
     }
   });
 
-  // After 5 s the emulator is either running or dead — stop watching stderr
   setTimeout(() => { child.stderr?.destroy(); child.unref(); }, 5000).unref();
 }
 
@@ -182,12 +211,15 @@ export function openUrlOnEmulator(serial: string, url: string): void {
   execSync(`"${findBin('adb')}" -s ${serial} shell am start -a android.intent.action.VIEW -d "${url}"`);
 }
 
+export function openUrlOnPhysicalAndroid(serial: string, url: string): void {
+  execSync(`"${findBin('adb')}" -s ${serial} shell am start -a android.intent.action.VIEW -d "${url}"`);
+}
+
 export function deleteAvd(name: string): void {
   execSync(`"${findAvdManager()}" delete avd -n "${name}"`);
 }
 
 export function createAvd(name: string, deviceId: string, systemImage: string): void {
-  // `echo no` skips the custom hardware profile prompt
   execSync(
     `echo no | "${findAvdManager()}" create avd -n "${name}" -k "${systemImage}" -d "${deviceId}" 2>&1`,
     { encoding: 'utf8' }

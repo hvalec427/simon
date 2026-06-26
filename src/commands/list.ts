@@ -1,6 +1,6 @@
 import chalk from 'chalk';
-import { listAvds, runningAvdNames } from '../utils/android.js';
-import { listSimulators } from '../utils/ios.js';
+import { connectedAndroidDevices, listAvds, runningAvdNames } from '../utils/android.js';
+import { listPhysicalIosDevices, listSimulators } from '../utils/ios.js';
 
 interface ListOptions {
   ios?: boolean;
@@ -24,6 +24,17 @@ export function listCommand(options: ListOptions): void {
         console.log(`  ${dot}  ${sim.name}${status}  ${chalk.gray(sim.runtime)}`);
       }
     }
+
+    const physical = listPhysicalIosDevices();
+    console.log(chalk.bold.blue('\niOS Physical Devices'));
+    console.log(chalk.gray('─'.repeat(50)));
+    if (physical.length === 0) {
+      console.log(chalk.gray('  No devices connected'));
+    } else {
+      for (const d of physical) {
+        console.log(`  ${chalk.green('●')}  ${d.name}  ${chalk.gray(`iOS ${d.osVersion}`)}`);
+      }
+    }
   }
 
   if (showAndroid) {
@@ -39,6 +50,17 @@ export function listCommand(options: ListOptions): void {
         const dot = isRunning ? chalk.green('●') : chalk.gray('○');
         const status = isRunning ? chalk.green(' running') : '';
         console.log(`  ${dot}  ${avd}${status}`);
+      }
+    }
+
+    const physical = connectedAndroidDevices();
+    console.log(chalk.bold.blue('\nAndroid Physical Devices'));
+    console.log(chalk.gray('─'.repeat(50)));
+    if (physical.length === 0) {
+      console.log(chalk.gray('  No devices connected'));
+    } else {
+      for (const d of physical) {
+        console.log(`  ${chalk.green('●')}  ${d.name}  ${chalk.gray(d.serial)}`);
       }
     }
   }

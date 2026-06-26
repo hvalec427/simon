@@ -42,6 +42,17 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon prefer -a` | Set your preferred Android emulator |
 | `simon prefer` | Show current preferred settings |
 
+## Physical device support
+
+Physical devices are shown in `simon list` and `simon running`, and work with `simon open-link`.
+
+- **Android**: plug in via USB — detected automatically via `adb`
+- **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (Xcode 15+). Opening deep links on physical iOS devices requires `idb`:
+  ```sh
+  brew install idb-companion
+  pip3 install fb-idb
+  ```
+
 ## Requirements
 
 - **iOS**: macOS with Xcode installed
