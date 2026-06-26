@@ -16,6 +16,12 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh |
 
 Or download the binary directly from the [latest release](https://github.com/hvalec427/simon/releases/latest).
 
+## Uninstall
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh | sh
+```
+
 ## Commands
 
 | Command | Description |
