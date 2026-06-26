@@ -1,0 +1,31 @@
+{
+  "name": "simon",
+  "version": "1.0.0",
+  "description": "CLI for managing iOS simulators and Android emulators",
+  "type": "module",
+  "bin": {
+    "simon": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc && chmod +x dist/index.js",
+    "bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=bundle.cjs",
+    "build:binary": "npm run bundle && pkg bundle.cjs --targets node22-macos-arm64,node22-macos-x64 --out-path bin",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "pkg": {
+    "scripts": "bundle.cjs"
+  },
+  "dependencies": {
+    "@inquirer/select": "^4.0.2",
+    "chalk": "^5.4.1",
+    "commander": "^13.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.29",
+    "@yao-pkg/pkg": "^6.20.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
