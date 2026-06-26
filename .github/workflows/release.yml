@@ -14,6 +14,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -22,6 +24,22 @@ jobs:
       - name: Read version from package.json
         id: version
         run: echo "value=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV=$(git tag --sort=-version:refname | head -1)
+          if [ -n "$PREV" ]; then
+            LOG=$(git log "${PREV}..HEAD" --pretty=format:"- %s" --no-merges)
+          else
+            LOG=$(git log --pretty=format:"- %s" --no-merges)
+          fi
+          if [ -z "$LOG" ]; then LOG="- No changes"; fi
+          {
+            echo "log<<EOF"
+            echo "$LOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
         run: npm ci
@@ -40,7 +58,14 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.value }}
           name: ${{ steps.version.outputs.value }}
-          generate_release_notes: true
+          body: |
+            ## What's changed
+            ${{ steps.changelog.outputs.log }}
+
+            ## Install
+            ```sh
+            curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
+            ```
           files: |
             simon-darwin-arm64
             simon-darwin-x64
