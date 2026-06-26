@@ -9,6 +9,7 @@ import { createCommand } from './commands/create.js';
 import { deleteCommand } from './commands/delete.js';
 import { openLinkCommand } from './commands/open-link.js';
 import { wipeCommand } from './commands/wipe.js';
+import { screenshotCommand } from './commands/screenshot.js';
 
 const program = new Command();
 
@@ -59,6 +60,14 @@ program
   .option('-i, --ios [name]', 'Open on iOS simulator')
   .option('-a, --android [name]', 'Open on Android emulator')
   .action(openLinkCommand);
+
+program
+  .command('screenshot')
+  .description('Take a screenshot of a running simulator or emulator')
+  .option('-i, --ios [name]', 'Take screenshot from iOS simulator')
+  .option('-a, --android [name]', 'Take screenshot from Android emulator')
+  .option('-o, --output <path>', 'Output file path (default: ~/Desktop/simon_screenshot_<timestamp>.png)')
+  .action(screenshotCommand);
 
 program
   .command('wipe')

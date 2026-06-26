@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'child_process';
-import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
@@ -224,6 +224,12 @@ export function createAvd(name: string, deviceId: string, systemImage: string): 
     `echo no | "${findAvdManager()}" create avd -n "${name}" -k "${systemImage}" -d "${deviceId}" 2>&1`,
     { encoding: 'utf8' }
   );
+}
+
+export function takeScreenshot(serial: string, outputPath: string): void {
+  const adb = findBin('adb');
+  const buf = execSync(`"${adb}" -s ${serial} exec-out screencap -p`, { maxBuffer: 50 * 1024 * 1024 });
+  writeFileSync(outputPath, buf);
 }
 
 export function wipeAvd(name: string): void {

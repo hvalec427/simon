@@ -140,3 +140,7 @@ export function openUrlOnPhysicalIos(udid: string, url: string): void {
 export function runningSimulators(): Simulator[] {
   return listSimulators().filter(s => s.state === 'Booted');
 }
+
+export function takeScreenshot(udid: string, outputPath: string): void {
+  execSync(`xcrun simctl io "${udid}" screenshot "${outputPath}"`);
+}
