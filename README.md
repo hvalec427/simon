@@ -41,6 +41,10 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon prefer -i` | Set your preferred iOS simulator |
 | `simon prefer -a` | Set your preferred Android emulator |
 | `simon prefer` | Show current preferred settings |
+| `simon logs` | Stream logs from a running device (Ctrl+C to stop) |
+| `simon logs -i` | Stream logs from a running iOS simulator |
+| `simon logs -a` | Stream logs from a running Android emulator |
+| `simon logs -f <expr>` | Stream logs with a filter expression |
 | `simon record` | Record screen from a running device (Ctrl+C to stop) |
 | `simon record -i` | Record from a running iOS simulator |
 | `simon record -a` | Record from a running Android emulator |

@@ -11,6 +11,7 @@ import { openLinkCommand } from './commands/open-link.js';
 import { wipeCommand } from './commands/wipe.js';
 import { screenshotCommand } from './commands/screenshot.js';
 import { recordCommand } from './commands/record.js';
+import { logsCommand } from './commands/logs.js';
 
 const program = new Command();
 
@@ -61,6 +62,14 @@ program
   .option('-i, --ios [name]', 'Open on iOS simulator')
   .option('-a, --android [name]', 'Open on Android emulator')
   .action(openLinkCommand);
+
+program
+  .command('logs')
+  .description('Stream logs from a running simulator or emulator')
+  .option('-i, --ios [name]', 'Stream logs from iOS simulator')
+  .option('-a, --android [name]', 'Stream logs from Android emulator')
+  .option('-f, --filter <expression>', 'Filter expression (predicate for iOS, regex for Android)')
+  .action(logsCommand);
 
 program
   .command('record')
