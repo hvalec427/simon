@@ -151,11 +151,27 @@ export function runningAvdNames(): string[] {
 // ── Actions ───────────────────────────────────────────────────────────────────
 
 export function launchAvd(name: string): void {
-  const child = spawn(findBin('emulator'), ['-avd', name], {
+  const emulatorBin = findBin('emulator');
+
+  const child = spawn(emulatorBin, ['-avd', name], {
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', 'pipe'],
+    cwd: path.dirname(emulatorBin),
+    env: { ...process.env, ANDROID_HOME: getSdkRoot(), ANDROID_SDK_ROOT: getSdkRoot() },
   });
-  child.unref();
+
+  let stderr = '';
+  child.stderr!.on('data', (chunk: Buffer) => { stderr += chunk.toString(); });
+
+  child.on('exit', code => {
+    if (code !== 0) {
+      const fatal = stderr.split('\n').find(l => l.includes('FATAL') || l.includes('Error:'));
+      if (fatal) process.stderr.write(fatal.replace(/.*\| /, '').trim() + '\n');
+    }
+  });
+
+  // After 5 s the emulator is either running or dead — stop watching stderr
+  setTimeout(() => { child.stderr?.destroy(); child.unref(); }, 5000).unref();
 }
 
 export function stopEmulator(serial: string): void {
