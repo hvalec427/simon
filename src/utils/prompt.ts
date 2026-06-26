@@ -2,6 +2,21 @@ import { Separator } from '@inquirer/core';
 import select from '@inquirer/select';
 import chalk from 'chalk';
 
+const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+
+export function spinner(text: string): () => void {
+  if (!process.stdout.isTTY) return () => {};
+  let i = 0;
+  process.stdout.write(`\x1B[?25l\r${chalk.cyan(SPINNER_FRAMES[i++])} ${text}`);
+  const id = setInterval(() => {
+    process.stdout.write(`\r${chalk.cyan(SPINNER_FRAMES[i++ % SPINNER_FRAMES.length])} ${text}`);
+  }, 80);
+  return () => {
+    clearInterval(id);
+    process.stdout.write('\r\x1B[K\x1B[?25h');
+  };
+}
+
 export async function selectWithExit<T>(
   message: string,
   choices: { name: string; value: T }[]
