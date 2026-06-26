@@ -10,6 +10,7 @@ import { deleteCommand } from './commands/delete.js';
 import { openLinkCommand } from './commands/open-link.js';
 import { wipeCommand } from './commands/wipe.js';
 import { screenshotCommand } from './commands/screenshot.js';
+import { recordCommand } from './commands/record.js';
 
 const program = new Command();
 
@@ -60,6 +61,14 @@ program
   .option('-i, --ios [name]', 'Open on iOS simulator')
   .option('-a, --android [name]', 'Open on Android emulator')
   .action(openLinkCommand);
+
+program
+  .command('record')
+  .description('Record the screen of a running simulator or emulator')
+  .option('-i, --ios [name]', 'Record from iOS simulator')
+  .option('-a, --android [name]', 'Record from Android emulator')
+  .option('-o, --output <path>', 'Output file path (default: ~/Desktop/simon_recording_<timestamp>.mp4)')
+  .action(recordCommand);
 
 program
   .command('screenshot')

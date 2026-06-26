@@ -41,6 +41,9 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon prefer -i` | Set your preferred iOS simulator |
 | `simon prefer -a` | Set your preferred Android emulator |
 | `simon prefer` | Show current preferred settings |
+| `simon record` | Record screen from a running device (Ctrl+C to stop) |
+| `simon record -i` | Record from a running iOS simulator |
+| `simon record -a` | Record from a running Android emulator |
 | `simon screenshot` | Take a screenshot from a running device (picker if multiple) |
 | `simon screenshot -i` | Take a screenshot from a running iOS simulator |
 | `simon screenshot -a` | Take a screenshot from a running Android emulator |
