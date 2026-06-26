@@ -35,8 +35,10 @@ program
   .action(preferCommand);
 
 program
-  .command('list [platform]')
-  .description('List simulators/emulators — platform: ios | android (default: both)')
+  .command('list')
+  .description('List simulators/emulators (default: both)')
+  .option('-i, --ios', 'List iOS simulators')
+  .option('-a, --android', 'List Android emulators')
   .action(listCommand);
 
 program

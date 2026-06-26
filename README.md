@@ -27,8 +27,8 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon stop -i` | Stop a running iOS simulator |
 | `simon stop -a` | Stop a running Android emulator |
 | `simon list` | List all simulators and emulators |
-| `simon list ios` | List iOS simulators |
-| `simon list android` | List Android emulators |
+| `simon list -i` | List iOS simulators |
+| `simon list -a` | List Android emulators |
 | `simon running` | Show what's currently running |
 | `simon prefer -i` | Set your preferred iOS simulator |
 | `simon prefer -a` | Set your preferred Android emulator |

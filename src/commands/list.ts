@@ -2,14 +2,14 @@ import chalk from 'chalk';
 import { listAvds, runningAvdNames } from '../utils/android.js';
 import { listSimulators } from '../utils/ios.js';
 
-export function listCommand(platform?: string): void {
-  const showIos = !platform || platform === 'ios';
-  const showAndroid = !platform || platform === 'android';
+interface ListOptions {
+  ios?: boolean;
+  android?: boolean;
+}
 
-  if (platform && platform !== 'ios' && platform !== 'android') {
-    console.error(chalk.red(`Unknown platform "${platform}". Use ios or android.`));
-    process.exit(1);
-  }
+export function listCommand(options: ListOptions): void {
+  const showIos = !options.ios && !options.android ? true : !!options.ios;
+  const showAndroid = !options.ios && !options.android ? true : !!options.android;
 
   if (showIos) {
     const sims = listSimulators();
