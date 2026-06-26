@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-REPO="YOUR_GITHUB_USERNAME/simon"
+REPO="hvalec427/simon"
 INSTALL_DIR="/usr/local/bin"
 
 # Detect architecture
