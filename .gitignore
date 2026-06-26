@@ -2,3 +2,4 @@ node_modules/
 dist/
 bin/
 bundle.cjs
+.DS_Store
