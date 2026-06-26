@@ -55,4 +55,10 @@ program
   .description('Show currently running simulators and emulators')
   .action(runningCommand);
 
+process.on('uncaughtException', err => {
+  if ((err as NodeJS.ErrnoException).name === 'ExitPromptError') process.exit(0);
+  console.error(err);
+  process.exit(1);
+});
+
 program.parse();
