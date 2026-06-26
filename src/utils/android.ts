@@ -1,5 +1,5 @@
 import { execSync, spawn } from 'child_process';
-import { existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
@@ -224,4 +224,20 @@ export function createAvd(name: string, deviceId: string, systemImage: string): 
     `echo no | "${findAvdManager()}" create avd -n "${name}" -k "${systemImage}" -d "${deviceId}" 2>&1`,
     { encoding: 'utf8' }
   );
+}
+
+export function wipeAvd(name: string): void {
+  const iniFile = path.join(homedir(), '.android', 'avd', `${name}.ini`);
+  let avdPath = path.join(homedir(), '.android', 'avd', `${name}.avd`);
+
+  if (existsSync(iniFile)) {
+    const ini = readFileSync(iniFile, 'utf8');
+    const match = ini.match(/^path\s*=\s*(.+)$/m);
+    if (match) avdPath = match[1].trim();
+  }
+
+  for (const pattern of ['userdata-qemu.img', 'userdata-qemu.img.qcow2', 'cache.img', 'cache.img.qcow2']) {
+    const f = path.join(avdPath, pattern);
+    if (existsSync(f)) rmSync(f);
+  }
 }

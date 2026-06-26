@@ -8,6 +8,7 @@ import { preferCommand } from './commands/prefer.js';
 import { createCommand } from './commands/create.js';
 import { deleteCommand } from './commands/delete.js';
 import { openLinkCommand } from './commands/open-link.js';
+import { wipeCommand } from './commands/wipe.js';
 
 const program = new Command();
 
@@ -58,6 +59,13 @@ program
   .option('-i, --ios [name]', 'Open on iOS simulator')
   .option('-a, --android [name]', 'Open on Android emulator')
   .action(openLinkCommand);
+
+program
+  .command('wipe')
+  .description('Wipe all data on a simulator or emulator')
+  .option('-i, --ios [name]', 'iOS simulator to wipe')
+  .option('-a, --android [name]', 'Android emulator to wipe')
+  .action(wipeCommand);
 
 program
   .command('list')

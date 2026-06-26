@@ -41,6 +41,10 @@ Or download the binary directly from the [latest release](https://github.com/hva
 | `simon prefer -i` | Set your preferred iOS simulator |
 | `simon prefer -a` | Set your preferred Android emulator |
 | `simon prefer` | Show current preferred settings |
+| `simon wipe -i` | Wipe all data on an iOS simulator (interactive picker) |
+| `simon wipe -a` | Wipe all data on an Android emulator (interactive picker) |
+| `simon wipe -i "iPhone 16"` | Wipe a specific iOS simulator |
+| `simon wipe -a Pixel_9_Pro` | Wipe a specific Android emulator |
 
 ## Physical device support
 
