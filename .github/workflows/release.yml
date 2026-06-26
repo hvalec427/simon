@@ -65,7 +65,7 @@ jobs:
 
             ## Install
             ```sh
-            curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
+            curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/${{ steps.version.outputs.value }}/install.sh | sh -s ${{ steps.version.outputs.value }}
             ```
           files: |
             simon-darwin-arm64

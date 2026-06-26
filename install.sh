@@ -12,9 +12,13 @@ else
   FILE="simon-darwin-x64"
 fi
 
-# Get latest release version
-VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
-  | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+# Use pinned version if provided, otherwise fetch latest
+if [ -n "$1" ]; then
+  VERSION="$1"
+else
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
+    | grep '"tag_name"' | head -1 | cut -d'"' -f4)
+fi
 
 if [ -z "$VERSION" ]; then
   echo "Error: could not fetch latest release from $REPO"
