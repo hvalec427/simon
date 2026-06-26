@@ -162,6 +162,10 @@ export function stopEmulator(serial: string): void {
   execSync(`"${findBin('adb')}" -s ${serial} emu kill 2>/dev/null`);
 }
 
+export function deleteAvd(name: string): void {
+  execSync(`"${findAvdManager()}" delete avd -n "${name}"`);
+}
+
 export function createAvd(name: string, deviceId: string, systemImage: string): void {
   // `echo no` skips the custom hardware profile prompt
   execSync(

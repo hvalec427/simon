@@ -87,6 +87,10 @@ export function shutdownSimulator(udid: string): void {
   execSync(`xcrun simctl shutdown "${udid}" 2>/dev/null`);
 }
 
+export function deleteSimulator(udid: string): void {
+  execSync(`xcrun simctl delete "${udid}"`);
+}
+
 export function createSimulator(name: string, deviceType: string, runtime: string): string {
   const out = execSync(`xcrun simctl create "${name}" "${deviceType}" "${runtime}"`, {
     encoding: 'utf8',

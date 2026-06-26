@@ -17,6 +17,7 @@
     "scripts": "bundle.cjs"
   },
   "dependencies": {
+    "@inquirer/confirm": "^6.1.1",
     "@inquirer/input": "^5.1.2",
     "@inquirer/select": "^4.0.2",
     "chalk": "^5.4.1",

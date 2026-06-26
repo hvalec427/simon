@@ -6,6 +6,7 @@ import { runningCommand } from './commands/running.js';
 import { stopCommand } from './commands/stop.js';
 import { preferCommand } from './commands/prefer.js';
 import { createCommand } from './commands/create.js';
+import { deleteCommand } from './commands/delete.js';
 
 const program = new Command();
 
@@ -20,6 +21,13 @@ program
   .option('-i, --ios', 'Create an iOS simulator')
   .option('-a, --android', 'Create an Android emulator')
   .action(createCommand);
+
+program
+  .command('delete')
+  .description('Delete a simulator or emulator')
+  .option('-i, --ios [name]', 'iOS simulator to delete')
+  .option('-a, --android [name]', 'Android emulator to delete')
+  .action(deleteCommand);
 
 program
   .command('launch')
