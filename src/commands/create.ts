@@ -1,5 +1,4 @@
 import input from '@inquirer/input';
-import select from '@inquirer/select';
 import chalk from 'chalk';
 import {
   createAvd,
@@ -7,6 +6,7 @@ import {
   listInstalledSystemImages,
 } from '../utils/android.js';
 import { createSimulator, listDeviceTypes, listRuntimes } from '../utils/ios.js';
+import { selectWithExit } from '../utils/prompt.js';
 
 interface CreateOptions {
   ios?: boolean;
@@ -36,15 +36,8 @@ async function createIos(): Promise<void> {
     process.exit(1);
   }
 
-  const deviceType = await select({
-    message: 'Select device:',
-    choices: deviceTypes.map(d => ({ name: d.name, value: d })),
-  });
-
-  const runtime = await select({
-    message: 'Select iOS version:',
-    choices: runtimes.map(r => ({ name: r.name, value: r })),
-  });
+  const deviceType = await selectWithExit('Select device:', deviceTypes.map(d => ({ name: d.name, value: d })));
+  const runtime = await selectWithExit('Select iOS version:', runtimes.map(r => ({ name: r.name, value: r })));
 
   const name = await input({
     message: 'Simulator name:',
@@ -76,15 +69,8 @@ async function createAndroid(): Promise<void> {
     process.exit(1);
   }
 
-  const device = await select({
-    message: 'Select device:',
-    choices: devices.map(d => ({ name: d.name, value: d })),
-  });
-
-  const image = await select({
-    message: 'Select Android version:',
-    choices: images.map(i => ({ name: i.label, value: i })),
-  });
+  const device = await selectWithExit('Select device:', devices.map(d => ({ name: d.name, value: d })));
+  const image = await selectWithExit('Select Android version:', images.map(i => ({ name: i.label, value: i })));
 
   const name = await input({
     message: 'Emulator name:',

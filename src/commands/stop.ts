@@ -1,7 +1,7 @@
-import select from '@inquirer/select';
 import chalk from 'chalk';
 import { runningEmulators, stopEmulator } from '../utils/android.js';
 import { runningSimulators, shutdownSimulator } from '../utils/ios.js';
+import { selectWithExit } from '../utils/prompt.js';
 
 interface StopOptions {
   ios?: string | boolean;
@@ -38,13 +38,10 @@ async function stopIos(arg: string | boolean): Promise<void> {
     return;
   }
 
-  const sim = await select({
-    message: 'Select an iOS simulator to stop:',
-    choices: running.map(s => ({
-      name: `${s.name}  ${chalk.gray(s.runtime)}`,
-      value: s,
-    })),
-  });
+  const sim = await selectWithExit('Select an iOS simulator to stop:', running.map(s => ({
+    name: `${s.name}  ${chalk.gray(s.runtime)}`,
+    value: s,
+  })));
 
   console.log(chalk.cyan(`Stopping ${sim.name}...`));
   shutdownSimulator(sim.udid);
@@ -71,10 +68,10 @@ async function stopAndroid(arg: string | boolean): Promise<void> {
     return;
   }
 
-  const emu = await select({
-    message: 'Select an Android emulator to stop:',
-    choices: running.map(e => ({ name: e.name, value: e })),
-  });
+  const emu = await selectWithExit('Select an Android emulator to stop:', running.map(e => ({
+    name: e.name,
+    value: e,
+  })));
 
   console.log(chalk.cyan(`Stopping ${emu.name}...`));
   stopEmulator(emu.serial);

@@ -1,8 +1,8 @@
-import select from '@inquirer/select';
 import chalk from 'chalk';
 import { launchAvd, listAvds } from '../utils/android.js';
 import { bootSimulator, listSimulators } from '../utils/ios.js';
 import { loadPrefs } from '../utils/prefs.js';
+import { selectWithExit } from '../utils/prompt.js';
 
 interface LaunchOptions {
   ios?: string | boolean;
@@ -49,13 +49,10 @@ async function launchIos(arg: string | boolean, pick?: boolean): Promise<void> {
     }
   }
 
-  const sim = await select({
-    message: 'Select an iOS simulator:',
-    choices: sims.map(s => ({
-      name: `${s.name}  ${chalk.gray(s.runtime)}${s.state === 'Booted' ? chalk.green('  ● running') : ''}`,
-      value: s,
-    })),
-  });
+  const sim = await selectWithExit('Select an iOS simulator:', sims.map(s => ({
+    name: `${s.name}  ${chalk.gray(s.runtime)}${s.state === 'Booted' ? chalk.green('  ● running') : ''}`,
+    value: s,
+  })));
 
   console.log(chalk.cyan(`Launching ${sim.name}...`));
   bootSimulator(sim.udid);
@@ -86,10 +83,7 @@ async function launchAndroid(arg: string | boolean, pick?: boolean): Promise<voi
     return;
   }
 
-  const name = await select({
-    message: 'Select an Android emulator:',
-    choices: avds.map(a => ({ name: a, value: a })),
-  });
+  const name = await selectWithExit('Select an Android emulator:', avds.map(a => ({ name: a, value: a })));
 
   console.log(chalk.cyan(`Launching ${name}...`));
   launchAvd(name);

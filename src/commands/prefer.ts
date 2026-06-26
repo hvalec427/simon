@@ -1,8 +1,8 @@
-import select from '@inquirer/select';
 import chalk from 'chalk';
 import { listAvds } from '../utils/android.js';
 import { listSimulators } from '../utils/ios.js';
 import { loadPrefs, setAndroidPref, setIosPref } from '../utils/prefs.js';
+import { selectWithExit } from '../utils/prompt.js';
 
 interface PreferOptions {
   ios?: boolean;
@@ -49,15 +49,10 @@ async function pickIos(): Promise<void> {
     process.exit(1);
   }
 
-  const prefs = loadPrefs();
-  const sim = await select({
-    message: 'Select preferred iOS simulator:',
-    choices: sims.map(s => ({
-      name: `${s.name}  ${chalk.gray(s.runtime)}`,
-      value: s,
-    })),
-    default: sims.find(s => s.udid === prefs.ios),
-  });
+  const sim = await selectWithExit('Select preferred iOS simulator:', sims.map(s => ({
+    name: `${s.name}  ${chalk.gray(s.runtime)}`,
+    value: s,
+  })));
 
   setIosPref(sim.udid);
   console.log(chalk.green(`Preferred iOS simulator set to: ${sim.name}`));
@@ -70,12 +65,10 @@ async function pickAndroid(): Promise<void> {
     process.exit(1);
   }
 
-  const prefs = loadPrefs();
-  const name = await select({
-    message: 'Select preferred Android emulator:',
-    choices: avds.map(a => ({ name: a, value: a })),
-    default: prefs.android,
-  });
+  const name = await selectWithExit('Select preferred Android emulator:', avds.map(a => ({
+    name: a,
+    value: a,
+  })));
 
   setAndroidPref(name);
   console.log(chalk.green(`Preferred Android emulator set to: ${name}`));
