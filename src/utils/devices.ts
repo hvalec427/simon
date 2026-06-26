@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { getRunningAndroidDevicesAsync } from './android.js';
 import { getRunningIosDevicesAsync } from './ios.js';
-import { selectWithExit } from './prompt.js';
+import { selectWithExit, spinner } from './prompt.js';
 
 export type RunningDevice =
   | { platform: 'ios'; kind: 'simulator'; name: string; udid: string; runtime: string }
@@ -37,7 +37,9 @@ export async function pickRunningDevice(
   filter?: 'ios' | 'android',
   name?: string,
 ): Promise<RunningDevice> {
+  const stop = spinner('Loading devices...');
   const devices = await getAllRunningDevices(filter);
+  stop();
 
   if (devices.length === 0) {
     const what = filter === 'ios'
