@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
+import { spinner } from '../utils/prompt.js';
 
 interface RecordOptions {
   ios?: string | boolean;
@@ -53,11 +54,26 @@ async function recordIos(udid: string, outputPath: string): Promise<void> {
     stdio: ['ignore', 'ignore', 'inherit'],
   });
 
-  process.once('SIGINT', () => proc.kill('SIGINT'));
+  const exitPromise = new Promise<void>(resolve => proc.on('exit', resolve));
+  let stopping = false;
+  let stopSpinner: (() => void) | undefined;
 
-  await new Promise<void>(resolve => proc.on('exit', resolve));
+  process.once('SIGINT', () => {
+    stopping = true;
+    process.stdout.write('\n');
+    stopSpinner = spinner('Saving...');
+    // xcrun already received SIGINT from the terminal — do not send a second one
+  });
 
-  console.log(chalk.green(`\nSaved to ${outputPath}`));
+  await exitPromise;
+  stopSpinner?.();
+
+  if (stopping) {
+    console.log(chalk.green(`Saved to ${outputPath}`));
+    process.exit(0);
+  } else {
+    console.log(chalk.green(`\nSaved to ${outputPath}`));
+  }
 }
 
 async function recordAndroid(serial: string, outputPath: string): Promise<void> {
@@ -80,12 +96,15 @@ async function recordAndroid(serial: string, outputPath: string): Promise<void> 
   const save = async (): Promise<void> => {
     if (saved) return;
     saved = true;
+    process.stdout.write('\n');
+    const stopSpin = spinner('Saving...');
     try {
-      console.log(chalk.cyan('\nSaving...'));
       execSync(`"${adb}" -s ${serial} pull "${remoteFile}" "${outputPath}" 2>/dev/null`);
       execSync(`"${adb}" -s ${serial} shell rm "${remoteFile}" 2>/dev/null`);
+      stopSpin();
       console.log(chalk.green(`Saved to ${outputPath}`));
     } catch {
+      stopSpin();
       console.error(chalk.red('Failed to pull recording from device.'));
     }
   };
