@@ -13,6 +13,7 @@ import { checkUpdateCommand } from './commands/check-update.js';
 import { updateCommand } from './commands/update.js';
 import { doctorCommand } from './commands/doctor.js';
 import { pushCommand } from './commands/push.js';
+import { locationCommand } from './commands/location.js';
 
 const program = new Command();
 
@@ -83,6 +84,14 @@ program
   .command('running')
   .description('Show currently running simulators and emulators')
   .action(runningCommand);
+
+program
+  .command('location [coords]')
+  .description('Set a simulated GPS location (coords as "lat,lon") on a simulator or emulator')
+  .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
+  .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
+  .option('-r, --reset', 'Clear the simulated location (iOS simulators)')
+  .action(locationCommand);
 
 program
   .command('push [payload]')

@@ -35,6 +35,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon running` | Show what's currently running |
 | `simon open-link <url>` | Open a deep link on a running device |
 | `simon logs` | Stream logs from a running device (Ctrl+C to stop) |
+| `simon location <lat,lon>` | Set a simulated GPS location on a simulator/emulator |
 | `simon push <payload>` | Send a push notification to an iOS simulator |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` | Check whether a newer version is available |
@@ -57,6 +58,7 @@ simon launch -i "iPhone 16"  # launch that specific one, no picker
 
 ### Command-specific flags
 
+- `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it (iOS). Simulators/emulators only — not physical devices.
 - `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
 - `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
 - `push <payload> -b <id>` — target app bundle id (if not baked into the payload)
