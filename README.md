@@ -52,6 +52,7 @@ Every device command follows the same rule: **no flag** → pick from a combined
 | `simon wipe` | Pick any stopped simulator/emulator to wipe |
 | `simon wipe -i` / `-a` | Limit the list to iOS / Android |
 | `simon wipe -i "iPhone 16"` | Wipe a specific device by name |
+| `simon push --template > push.json` | Print an example payload to start from |
 | `simon push <payload>` | Send a push notification to an iOS simulator |
 | `simon push <payload> -b <id>` | …specifying the target app bundle id |
 | `simon doctor` | Check your environment for the required tooling |

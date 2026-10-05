@@ -85,10 +85,11 @@ program
   .action(runningCommand);
 
 program
-  .command('push <payload>')
+  .command('push [payload]')
   .description('Send a push notification to an iOS simulator (payload = JSON/apns file)')
   .option('-i, --ios [name]', 'Target a specific iOS simulator by name')
   .option('-b, --bundle-id <id>', 'App bundle id (if not set in the payload)')
+  .option('-t, --template', 'Print an example payload you can save to a file')
   .action(pushCommand);
 
 program

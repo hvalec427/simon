@@ -6,9 +6,34 @@ import { pickRunningDevice } from '../utils/devices.js';
 interface PushOptions {
   ios?: string | boolean;
   bundleId?: string;
+  template?: boolean;
 }
 
-export async function pushCommand(payload: string, options: PushOptions): Promise<void> {
+// A production-shaped APNs payload: `aps` for the notification, plus custom
+// data at the top level (where FCM delivers it on iOS). Edit and save to a file.
+const TEMPLATE = {
+  aps: {
+    alert: { title: 'Order update', body: 'Your laundry is on the way 🚚' },
+    sound: 'default',
+    badge: 1,
+  },
+  order_uuid: 'REPLACE_ME',
+  redirect: 'RC',
+};
+
+export async function pushCommand(payload: string | undefined, options: PushOptions): Promise<void> {
+  if (options.template) {
+    // Only the JSON goes to stdout, so `simon push --template > push.json` is clean.
+    console.log(JSON.stringify(TEMPLATE, null, 2));
+    console.error(chalk.gray('\nSave it to a file, then: simon push <file> -b <bundle-id>'));
+    return;
+  }
+
+  if (!payload) {
+    console.error(chalk.red('Provide a payload file, or use --template to print an example.'));
+    process.exit(1);
+  }
+
   if (!existsSync(payload)) {
     console.error(chalk.red(`Payload file not found: ${payload}`));
     process.exit(1);
