@@ -17,9 +17,11 @@ concurrency:
 
 jobs:
   release:
-    # Linux runners have far more capacity than macOS; pkg cross-compiles the
-    # macOS binaries from here, so we don't need a macOS runner just to build.
-    runs-on: ubuntu-latest
+    # Must be macOS: pkg can't generate V8 bytecode for a macOS-arm64 target when
+    # cross-building on Linux, and arm64 binaries need an (ad-hoc) code signature
+    # that pkg applies natively on macOS. Linux builds produce binaries that are
+    # killed on Apple Silicon. Capacity-related queue failures can just be re-run.
+    runs-on: macos-latest
 
     steps:
       - uses: actions/checkout@v4
