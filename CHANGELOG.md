@@ -1,3 +1,10 @@
+# [2.1.0](https://github.com/hvalec427/simon/compare/v2.0.1...v2.1.0) (2026-10-05)
+
+
+### Features
+
+* add check-update and update commands for self-updating ([51bd0c3](https://github.com/hvalec427/simon/commit/51bd0c35e1a83a7330e5dfcdfe378eb9e921d2f3))
+
 ## [2.0.1](https://github.com/hvalec427/simon/compare/v2.0.0...v2.0.1) (2026-10-05)
 
 
