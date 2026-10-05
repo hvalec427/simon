@@ -1,3 +1,10 @@
+## [2.0.1](https://github.com/hvalec427/simon/compare/v2.0.0...v2.0.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* route physical iOS deeplinks via Safari instead of prompting ([ab92c32](https://github.com/hvalec427/simon/commit/ab92c32ec4fc5d862c329106443cba5a5f43c226))
+
 # [2.0.0](https://github.com/hvalec427/simon/compare/v1.6.0...v2.0.0) (2026-10-05)
 
 
