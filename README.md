@@ -1,6 +1,6 @@
 # simon
 
-A CLI tool for managing iOS simulators and Android emulators — because opening Xcode or Android Studio just to boot a simulator is too slow.
+A CLI for managing iOS simulators, Android emulators, and connected physical devices — boot, stop, wipe, stream logs, open deep links, and send test push notifications, all from the terminal.
 
 Built entirely with AI (Claude).
 
@@ -24,44 +24,47 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 
 ## Commands
 
-Every device command follows the same rule: **no flag** → pick from a combined list of all devices · **`-i`/`-a`** → limit to that platform · **name** → target it directly · **exactly one match** → used automatically, no prompt.
-
 | Command | Description |
 |---|---|
-| `simon create` | Create a simulator or emulator (asks which) |
-| `simon create -i` / `-a` | Skip the platform prompt (iOS / Android) |
-| `simon delete` | Pick any simulator/emulator to delete |
-| `simon delete -i` / `-a` | Limit the list to iOS / Android |
-| `simon launch` | Pick any simulator/emulator to launch |
-| `simon launch -i` / `-a` | Limit the list to iOS / Android |
-| `simon launch -i "iPhone 16"` | Launch a specific device by name |
-| `simon stop` | Pick any running device to stop |
-| `simon stop -i` / `-a` | Limit the list to iOS / Android |
+| `simon create` | Create a simulator or emulator |
+| `simon launch` | Launch a simulator or emulator |
+| `simon stop` | Stop a running simulator or emulator |
+| `simon delete` | Delete a simulator or emulator |
+| `simon wipe` | Erase all data on a simulator or emulator |
 | `simon list` | List all simulators and emulators |
-| `simon list -i` | List iOS simulators |
-| `simon list -a` | List Android emulators |
 | `simon running` | Show what's currently running |
-| `simon open-link <url>` | Open a deep link on a running device (picker if multiple) |
-| `simon open-link <url> -i` | Open on a running iOS simulator |
-| `simon open-link <url> -a` | Open on a running Android emulator |
-| `simon open-link <url> -i "iPhone 16"` | Open on a specific running simulator |
+| `simon open-link <url>` | Open a deep link on a running device |
 | `simon logs` | Stream logs from a running device (Ctrl+C to stop) |
-| `simon logs -i` | Stream logs from a running iOS simulator |
-| `simon logs -a` | Stream logs from a running Android emulator |
-| `simon logs -f <expr>` | Stream logs with a filter expression |
-| `simon wipe` | Pick any stopped simulator/emulator to wipe |
-| `simon wipe -i` / `-a` | Limit the list to iOS / Android |
-| `simon wipe -i "iPhone 16"` | Wipe a specific device by name |
-| `simon push --template > push.json` | Print an example payload to start from |
 | `simon push <payload>` | Send a push notification to an iOS simulator |
-| `simon push <payload> -b <id>` | …specifying the target app bundle id |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` | Check whether a newer version is available |
-| `simon update` | Download and install the latest version |
+| `simon update` | Update simon to the latest version |
+
+### Selecting a device
+
+Every device command picks its target the same way:
+
+- **no flag** → pick from a combined list of all devices
+- **`-i` / `-a`** → limit the list to iOS / Android
+- **a name** → target that device directly
+- **exactly one match** → used automatically, no prompt
+
+```sh
+simon launch                 # pick any simulator/emulator from a list
+simon launch -a              # limit the picker to Android
+simon launch -i "iPhone 16"  # launch that specific one, no picker
+```
+
+### Command-specific flags
+
+- `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
+- `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
+- `push <payload> -b <id>` — target app bundle id (if not baked into the payload)
+- `push --template` — print an example payload to stdout (e.g. `simon push --template > push.json`)
 
 ## Physical device support
 
-Physical devices are shown in `simon list` and `simon running`, and work with `simon open-link`.
+Physical devices are shown in `simon list` and `simon running`, and work with `simon open-link` and `simon logs`.
 
 - **Android**: plug in via USB — detected automatically via `adb`
 - **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (needs full Xcode, not just the Command Line Tools)
@@ -74,20 +77,34 @@ To skip Safari and deliver the URL straight to a specific app, pass its bundle i
 simon open-link "myapp://path" -i "My iPhone" -b com.example.myapp
 ```
 
+## Push notifications
+
+`simon push` injects a notification straight into a booted simulator via `simctl` — it does **not** go through APNs or Firebase, so it won't exercise your delivery pipeline (tokens, server send). It's for testing how your app *handles* a notification.
+
+Start from the template, edit it, and send:
+
+```sh
+simon push --template > push.json
+simon push push.json -b com.example.myapp
+```
+
+The payload is a standard APNs payload — the same shape FCM delivers on iOS. The notification goes under `aps`; any custom **data** goes at the **top level** (that's where it lands in `userInfo`), with string values:
+
+```json
+{
+  "aps": {
+    "alert": { "title": "Order update", "body": "Your laundry is on the way 🚚" },
+    "sound": "default",
+    "badge": 1
+  },
+  "order_uuid": "47e8e4ef-db82-4f8c-ab25-5af7c5462185",
+  "redirect": "RC"
+}
+```
+
+The target app comes from `-b <bundle-id>` (in production this is the APNs topic, which lives outside the payload). The app must have been launched once on the booted simulator. Physical devices and Android aren't supported.
+
 ## Requirements
 
 - **iOS**: macOS with Xcode installed
 - **Android**: Android SDK (`ANDROID_HOME` set, or SDK at `~/Library/Android/sdk`)
-
-## Releasing
-
-Releases are automated with [semantic-release](https://semantic-release.gitbook.io/). Versioning and changelog come from commit messages, so commits must follow [Conventional Commits](https://www.conventionalcommits.org/) (enforced locally by a commitlint git hook):
-
-| Prefix | Example | Release |
-|---|---|---|
-| `fix:` | `fix: handle missing udid` | patch (x.y.**z**) |
-| `feat:` | `feat: add logs filter` | minor (x.**y**.0) |
-| `feat!:` / `BREAKING CHANGE:` in body | `feat!: drop prefer command` | major (**x**.0.0) |
-| `chore:`, `docs:`, `ci:`, `refactor:`, `test:` | `chore: bump deps` | no release |
-
-On every push to `master`, CI analyzes the new commits, bumps the version, writes `CHANGELOG.md`, builds the macOS binaries, and publishes a GitHub Release with a matching `vX.Y.Z` tag. Don't edit the version in `package.json` by hand.
