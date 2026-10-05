@@ -59,7 +59,7 @@ simon launch -i "iPhone 16"  # launch that specific one, no picker
 
 ### Command-specific flags
 
-- `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it (iOS). Works on simulators and emulators natively. **Physical iOS** is supported (experimental) via [go-ios](https://github.com/danielpaulus/go-ios) — simon installs it automatically if missing and starts the iOS 17+ developer tunnel for you (prompts for `sudo` once). Manage that tunnel yourself with `simon tunnel start|stop|status` if you prefer. **Physical Android** isn't supported — use a mock-location app (e.g. Lockito) in Developer Options.
+- `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it. Works on simulators and emulators natively. **Physical iOS** (experimental) via [go-ios](https://github.com/danielpaulus/go-ios) — simon installs it automatically if missing and starts the iOS 17+ developer tunnel for you (prompts for `sudo` once); manage it with `simon tunnel start|stop|status`. **Physical Android** works via a tiny helper app simon installs and drives over adb (needs Developer Options enabled on the device).
 - `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
 - `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
 - `push <payload> -b <id>` — target app bundle id (if not baked into the payload)

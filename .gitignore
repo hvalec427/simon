@@ -5,3 +5,11 @@ bundle.cjs
 simon-darwin-arm64
 simon-darwin-x64
 .DS_Store
+
+# Android helper build artifacts (the shipped APK is committed separately)
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/*.iml
+android/.idea/

@@ -3,6 +3,7 @@ import { execSync } from 'child_process';
 import { findBin } from '../utils/android.js';
 import { pickRunningDevice } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel, stopTunnel } from '../utils/goios.js';
+import { resetAndroidDeviceLocation, setAndroidDeviceLocation } from '../utils/androidmock.js';
 
 interface LocationOptions {
   ios?: string | boolean;
@@ -66,16 +67,14 @@ export async function locationCommand(coords: string | undefined, options: Locat
       } else {
         goIos(`setlocation --lat=${parsed!.lat} --lon=${parsed!.lon} --udid=${device.udid}`);
       }
+    } else if (device.kind === 'physical') {
+      // Real Android has no GPS-mock CLI; simon ships a tiny helper app it drives.
+      if (options.reset) resetAndroidDeviceLocation(device.serial);
+      else await setAndroidDeviceLocation(device.serial, parsed!.lat, parsed!.lon);
+    } else if (options.reset) {
+      console.error(chalk.yellow('Android emulators have no location reset — set a new location instead.'));
+      process.exit(1);
     } else {
-      if (device.kind === 'physical') {
-        console.error(chalk.red('Setting location on a physical Android device is not supported.'));
-        console.error(chalk.gray('Use a mock-location app (e.g. Lockito) selected in Developer Options → "Select mock location app".'));
-        process.exit(1);
-      }
-      if (options.reset) {
-        console.error(chalk.yellow('Android emulators have no location reset — set a new location instead.'));
-        process.exit(1);
-      }
       // `adb emu geo fix` takes longitude first, then latitude.
       execSync(`"${findBin('adb')}" -s ${device.serial} emu geo fix ${parsed!.lon} ${parsed!.lat}`);
     }
