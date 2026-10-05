@@ -47,9 +47,10 @@ program
 
 program
   .command('open-link <url>')
-  .description('Open a deep link on a running simulator or emulator')
-  .option('-i, --ios [name]', 'Open on iOS simulator')
-  .option('-a, --android [name]', 'Open on Android emulator')
+  .description('Open a deep link on a running simulator, emulator, or physical device')
+  .option('-i, --ios [name]', 'Open on iOS simulator or device')
+  .option('-a, --android [name]', 'Open on Android emulator or device')
+  .option('-b, --bundle-id <id>', 'Target app bundle id (physical iOS only; prompts if omitted)')
   .action(openLinkCommand);
 
 program
