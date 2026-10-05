@@ -14,13 +14,18 @@ interface CreateOptions {
 }
 
 export async function createCommand(options: CreateOptions): Promise<void> {
-  if (!options.ios && !options.android) {
-    console.error(chalk.red('Specify --ios (-i) or --android (-a)'));
-    process.exit(1);
+  let target: 'ios' | 'android';
+  if (options.ios) target = 'ios';
+  else if (options.android) target = 'android';
+  else {
+    target = await selectWithExit('What do you want to create?', [
+      { name: 'iOS simulator', value: 'ios' },
+      { name: 'Android emulator', value: 'android' },
+    ]);
   }
 
-  if (options.ios) await createIos();
-  if (options.android) await createAndroid();
+  if (target === 'ios') await createIos();
+  else await createAndroid();
 }
 
 async function createIos(): Promise<void> {

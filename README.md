@@ -24,18 +24,19 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 
 ## Commands
 
+Every device command follows the same rule: **no flag** → pick from a combined list of all devices · **`-i`/`-a`** → limit to that platform · **name** → target it directly · **exactly one match** → used automatically, no prompt.
+
 | Command | Description |
 |---|---|
-| `simon create -i` | Create a new iOS simulator (interactive) |
-| `simon create -a` | Create a new Android emulator (interactive) |
-| `simon delete -i` | Delete an iOS simulator |
-| `simon delete -a` | Delete an Android emulator |
-| `simon launch -i` | Launch iOS simulator (interactive picker) |
-| `simon launch -a` | Launch Android emulator (interactive picker) |
-| `simon launch -i "iPhone 16"` | Launch a specific iOS simulator by name |
-| `simon launch -a Pixel_9_Pro` | Launch a specific Android emulator by name |
-| `simon stop -i` | Stop a running iOS simulator |
-| `simon stop -a` | Stop a running Android emulator |
+| `simon create` | Create a simulator or emulator (asks which) |
+| `simon create -i` / `-a` | Skip the platform prompt (iOS / Android) |
+| `simon delete` | Pick any simulator/emulator to delete |
+| `simon delete -i` / `-a` | Limit the list to iOS / Android |
+| `simon launch` | Pick any simulator/emulator to launch |
+| `simon launch -i` / `-a` | Limit the list to iOS / Android |
+| `simon launch -i "iPhone 16"` | Launch a specific device by name |
+| `simon stop` | Pick any running device to stop |
+| `simon stop -i` / `-a` | Limit the list to iOS / Android |
 | `simon list` | List all simulators and emulators |
 | `simon list -i` | List iOS simulators |
 | `simon list -a` | List Android emulators |
@@ -48,10 +49,9 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon logs -i` | Stream logs from a running iOS simulator |
 | `simon logs -a` | Stream logs from a running Android emulator |
 | `simon logs -f <expr>` | Stream logs with a filter expression |
-| `simon wipe -i` | Wipe all data on an iOS simulator (interactive picker) |
-| `simon wipe -a` | Wipe all data on an Android emulator (interactive picker) |
-| `simon wipe -i "iPhone 16"` | Wipe a specific iOS simulator |
-| `simon wipe -a Pixel_9_Pro` | Wipe a specific Android emulator |
+| `simon wipe` | Pick any stopped simulator/emulator to wipe |
+| `simon wipe -i` / `-a` | Limit the list to iOS / Android |
+| `simon wipe -i "iPhone 16"` | Wipe a specific device by name |
 | `simon check-update` | Check whether a newer version is available |
 | `simon update` | Download and install the latest version |
 

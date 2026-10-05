@@ -28,23 +28,23 @@ program
 
 program
   .command('delete')
-  .description('Delete a simulator or emulator')
-  .option('-i, --ios [name]', 'iOS simulator to delete')
-  .option('-a, --android [name]', 'Android emulator to delete')
+  .description('Delete a simulator or emulator (picks from a list if no flag given)')
+  .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
+  .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(deleteCommand);
 
 program
   .command('launch')
-  .description('Launch a simulator or emulator')
-  .option('-i, --ios [name]', 'iOS simulator to launch (interactive if no name given)')
-  .option('-a, --android [name]', 'Android emulator to launch (interactive if no name given)')
+  .description('Launch a simulator or emulator (picks from a list if no flag given)')
+  .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
+  .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(launchCommand);
 
 program
   .command('stop')
-  .description('Stop a running simulator or emulator')
-  .option('-i, --ios [name]', 'iOS simulator to stop (interactive if no name given)')
-  .option('-a, --android [name]', 'Android emulator to stop (interactive if no name given)')
+  .description('Stop a running simulator or emulator (picks from a list if no flag given)')
+  .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
+  .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(stopCommand);
 
 program
@@ -65,9 +65,9 @@ program
 
 program
   .command('wipe')
-  .description('Wipe all data on a simulator or emulator')
-  .option('-i, --ios [name]', 'iOS simulator to wipe')
-  .option('-a, --android [name]', 'Android emulator to wipe')
+  .description('Wipe all data on a simulator or emulator (picks from a list if no flag given)')
+  .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
+  .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(wipeCommand);
 
 program
