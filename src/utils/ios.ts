@@ -185,7 +185,3 @@ export async function getRunningIosDevicesAsync(): Promise<{
 
   return { simulators, physical };
 }
-
-export function takeScreenshot(udid: string, outputPath: string): void {
-  execSync(`xcrun simctl io "${udid}" screenshot "${outputPath}"`);
-}

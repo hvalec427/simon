@@ -4,13 +4,10 @@ import { launchCommand } from './commands/launch.js';
 import { listCommand } from './commands/list.js';
 import { runningCommand } from './commands/running.js';
 import { stopCommand } from './commands/stop.js';
-import { preferCommand } from './commands/prefer.js';
 import { createCommand } from './commands/create.js';
 import { deleteCommand } from './commands/delete.js';
 import { openLinkCommand } from './commands/open-link.js';
 import { wipeCommand } from './commands/wipe.js';
-import { screenshotCommand } from './commands/screenshot.js';
-import { recordCommand } from './commands/record.js';
 import { logsCommand } from './commands/logs.js';
 
 const program = new Command();
@@ -39,7 +36,6 @@ program
   .description('Launch a simulator or emulator')
   .option('-i, --ios [name]', 'iOS simulator to launch (interactive if no name given)')
   .option('-a, --android [name]', 'Android emulator to launch (interactive if no name given)')
-  .option('-p, --pick', 'Always show the interactive picker, ignoring preferred')
   .action(launchCommand);
 
 program
@@ -48,13 +44,6 @@ program
   .option('-i, --ios [name]', 'iOS simulator to stop (interactive if no name given)')
   .option('-a, --android [name]', 'Android emulator to stop (interactive if no name given)')
   .action(stopCommand);
-
-program
-  .command('prefer')
-  .description('Set preferred simulator/emulator (used by launch when no name given)')
-  .option('-i, --ios', 'Set preferred iOS simulator')
-  .option('-a, --android', 'Set preferred Android emulator')
-  .action(preferCommand);
 
 program
   .command('open-link <url>')
@@ -70,22 +59,6 @@ program
   .option('-a, --android [name]', 'Stream logs from Android emulator')
   .option('-f, --filter <expression>', 'Filter expression (predicate for iOS, regex for Android)')
   .action(logsCommand);
-
-program
-  .command('record')
-  .description('Record the screen of a running simulator or emulator')
-  .option('-i, --ios [name]', 'Record from iOS simulator')
-  .option('-a, --android [name]', 'Record from Android emulator')
-  .option('-o, --output <path>', 'Output file path (default: ~/Desktop/simon_recording_<timestamp>.mp4)')
-  .action(recordCommand);
-
-program
-  .command('screenshot')
-  .description('Take a screenshot of a running simulator or emulator')
-  .option('-i, --ios [name]', 'Take screenshot from iOS simulator')
-  .option('-a, --android [name]', 'Take screenshot from Android emulator')
-  .option('-o, --output <path>', 'Output file path (default: ~/Desktop/simon_screenshot_<timestamp>.png)')
-  .action(screenshotCommand);
 
 program
   .command('wipe')
