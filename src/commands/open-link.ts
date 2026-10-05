@@ -6,13 +6,12 @@ import {
   runningEmulators,
 } from '../utils/android.js';
 import {
-  listInstalledApps,
   listPhysicalIosDevices,
   openUrlOnPhysicalIos,
   openUrlOnSimulator,
   runningSimulators,
 } from '../utils/ios.js';
-import { selectWithExit, spinner } from '../utils/prompt.js';
+import { selectWithExit } from '../utils/prompt.js';
 
 interface OpenLinkOptions {
   ios?: string | boolean;
@@ -41,39 +40,14 @@ export async function openLinkCommand(url: string, options: OpenLinkOptions): Pr
   }
 }
 
-async function openOnDevice(device: RunningDevice, url: string, bundleId?: string): Promise<void> {
+function openOnDevice(device: RunningDevice, url: string, bundleId?: string): void {
   if (device.platform === 'ios') {
     if (device.kind === 'simulator') openUrlOnSimulator(device.udid, url);
-    else openUrlOnPhysicalIos(device.udid, url, await resolveBundleId(device.udid, bundleId));
+    else openUrlOnPhysicalIos(device.udid, url, bundleId);
   } else {
     if (device.kind === 'emulator') openUrlOnEmulator(device.serial, url);
     else openUrlOnPhysicalAndroid(device.serial, url);
   }
-}
-
-// devicectl can't route a URL by scheme on a physical device — it launches a
-// specific app with the URL as payload, so we need the target app's bundle id.
-async function resolveBundleId(udid: string, bundleId?: string): Promise<string> {
-  if (bundleId) return bundleId;
-
-  const stop = spinner('Loading installed apps...');
-  let apps;
-  try {
-    apps = listInstalledApps(udid);
-  } finally {
-    stop();
-  }
-
-  if (apps.length === 0) {
-    console.error(chalk.red('No installed apps found on the device.'));
-    console.error(chalk.gray('Pass the target app explicitly with --bundle-id <id>.'));
-    process.exit(1);
-  }
-
-  return selectWithExit('Which app should open the link?', apps.map(a => ({
-    name: `${a.name}  ${chalk.gray(a.bundleId)}`,
-    value: a.bundleId,
-  })));
 }
 
 async function openOnIos(url: string, arg: string | boolean, bundleId?: string): Promise<void> {

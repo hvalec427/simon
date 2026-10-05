@@ -19,11 +19,6 @@ export interface DeviceType {
   identifier: string;
 }
 
-export interface InstalledApp {
-  name: string;
-  bundleId: string;
-}
-
 export interface Runtime {
   name: string;
   identifier: string;
@@ -143,27 +138,16 @@ function ensureDevicectl(): void {
   }
 }
 
-export function listInstalledApps(udid: string): InstalledApp[] {
+// devicectl has no system-wide "open URL" like simctl openurl. To reproduce the
+// "tap a link in a website" behaviour we hand the URL to Safari and let the
+// system route the scheme to the owning app. Passing an explicit bundleId
+// delivers the URL straight to that app instead (skips Safari's confirmation).
+export function openUrlOnPhysicalIos(udid: string, url: string, bundleId?: string): void {
   ensureDevicectl();
-  const tmpFile = '/tmp/simon-devicectl-apps.json';
-  execSync(
-    `xcrun devicectl device info apps --device "${udid}" --json-output "${tmpFile}" 2>/dev/null`
-  );
-  const data = JSON.parse(readFileSync(tmpFile, 'utf8'));
-  return (data.result?.apps ?? [])
-    .map((a: any) => ({
-      name: a.name ?? a.bundleIdentifier ?? 'Unknown',
-      bundleId: a.bundleIdentifier ?? '',
-    }))
-    .filter((a: InstalledApp) => a.bundleId)
-    .sort((a: InstalledApp, b: InstalledApp) => a.name.localeCompare(b.name));
-}
-
-export function openUrlOnPhysicalIos(udid: string, url: string, bundleId: string): void {
-  ensureDevicectl();
+  const target = bundleId ?? 'com.apple.mobilesafari';
   execSync(
     `xcrun devicectl device process launch --terminate-existing ` +
-      `--payload-url "${url}" --device "${udid}" "${bundleId}" 2>/dev/null`
+      `--payload-url "${url}" --device "${udid}" "${target}" 2>/dev/null`
   );
 }
 

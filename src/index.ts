@@ -50,7 +50,7 @@ program
   .description('Open a deep link on a running simulator, emulator, or physical device')
   .option('-i, --ios [name]', 'Open on iOS simulator or device')
   .option('-a, --android [name]', 'Open on Android emulator or device')
-  .option('-b, --bundle-id <id>', 'Target app bundle id (physical iOS only; prompts if omitted)')
+  .option('-b, --bundle-id <id>', 'Deliver directly to this app instead of routing via Safari (physical iOS only)')
   .action(openLinkCommand);
 
 program

@@ -60,7 +60,9 @@ Physical devices are shown in `simon list` and `simon running`, and work with `s
 - **Android**: plug in via USB — detected automatically via `adb`
 - **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (needs full Xcode, not just the Command Line Tools)
 
-Opening a deep link on a physical iOS device uses `xcrun devicectl`. Unlike a simulator, iOS can't auto-route a custom scheme to its app on a real device, so you must say which app opens the link. simon prompts with a picker of the installed apps, or you can pass it directly:
+Opening a deep link on a physical iOS device uses `xcrun devicectl`. The simulator's `simctl openurl` can route a scheme to its app directly; `devicectl` has no such command, so simon hands the URL to Safari and lets the system route it to the owning app — the same as tapping the link on a website (a custom scheme may show a one-time "Open in <app>?" confirmation).
+
+To skip Safari and deliver the URL straight to a specific app, pass its bundle id:
 
 ```sh
 simon open-link "myapp://path" -i "My iPhone" -b com.example.myapp
