@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/hvalec427/simon/compare/v2.1.0...v2.2.0) (2026-10-05)
+
+
+### Features
+
+* unify device selection across commands ([f39b388](https://github.com/hvalec427/simon/commit/f39b3881156064ac4774be0ca328e78d457e520c))
+
 # [2.1.0](https://github.com/hvalec427/simon/compare/v2.0.1...v2.1.0) (2026-10-05)
 
 
