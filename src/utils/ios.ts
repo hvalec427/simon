@@ -19,6 +19,11 @@ export interface DeviceType {
   identifier: string;
 }
 
+export interface InstalledApp {
+  name: string;
+  bundleId: string;
+}
+
 export interface Runtime {
   name: string;
   identifier: string;
@@ -126,15 +131,40 @@ export function openUrlOnSimulator(udid: string, url: string): void {
   execSync(`xcrun simctl openurl "${udid}" "${url}"`);
 }
 
-export function openUrlOnPhysicalIos(udid: string, url: string): void {
+function ensureDevicectl(): void {
   try {
-    execSync('which idb', { stdio: 'ignore' });
+    execSync('xcrun -f devicectl', { stdio: 'ignore' });
   } catch {
     throw new Error(
-      'idb is required to open links on physical iOS devices.\nInstall it with:\n  brew install idb-companion\n  pip3 install fb-idb'
+      'Opening deep links on a physical iOS device requires full Xcode (devicectl).\n' +
+        'Install Xcode, then point the tools at it:\n' +
+        '  sudo xcode-select -s /Applications/Xcode.app'
     );
   }
-  execSync(`idb open --udid "${udid}" "${url}"`);
+}
+
+export function listInstalledApps(udid: string): InstalledApp[] {
+  ensureDevicectl();
+  const tmpFile = '/tmp/simon-devicectl-apps.json';
+  execSync(
+    `xcrun devicectl device info apps --device "${udid}" --json-output "${tmpFile}" 2>/dev/null`
+  );
+  const data = JSON.parse(readFileSync(tmpFile, 'utf8'));
+  return (data.result?.apps ?? [])
+    .map((a: any) => ({
+      name: a.name ?? a.bundleIdentifier ?? 'Unknown',
+      bundleId: a.bundleIdentifier ?? '',
+    }))
+    .filter((a: InstalledApp) => a.bundleId)
+    .sort((a: InstalledApp, b: InstalledApp) => a.name.localeCompare(b.name));
+}
+
+export function openUrlOnPhysicalIos(udid: string, url: string, bundleId: string): void {
+  ensureDevicectl();
+  execSync(
+    `xcrun devicectl device process launch --terminate-existing ` +
+      `--payload-url "${url}" --device "${udid}" "${bundleId}" 2>/dev/null`
+  );
 }
 
 export function runningSimulators(): Simulator[] {

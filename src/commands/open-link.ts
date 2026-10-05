@@ -6,16 +6,18 @@ import {
   runningEmulators,
 } from '../utils/android.js';
 import {
+  listInstalledApps,
   listPhysicalIosDevices,
   openUrlOnPhysicalIos,
   openUrlOnSimulator,
   runningSimulators,
 } from '../utils/ios.js';
-import { selectWithExit } from '../utils/prompt.js';
+import { selectWithExit, spinner } from '../utils/prompt.js';
 
 interface OpenLinkOptions {
   ios?: string | boolean;
   android?: string | boolean;
+  bundleId?: string;
 }
 
 type RunningDevice =
@@ -25,26 +27,56 @@ type RunningDevice =
   | { platform: 'android'; kind: 'physical'; name: string; serial: string };
 
 export async function openLinkCommand(url: string, options: OpenLinkOptions): Promise<void> {
-  if (options.ios !== undefined) {
-    await openOnIos(url, options.ios);
-  } else if (options.android !== undefined) {
-    await openOnAndroid(url, options.android);
-  } else {
-    await openOnAny(url);
+  try {
+    if (options.ios !== undefined) {
+      await openOnIos(url, options.ios, options.bundleId);
+    } else if (options.android !== undefined) {
+      await openOnAndroid(url, options.android);
+    } else {
+      await openOnAny(url, options.bundleId);
+    }
+  } catch (err) {
+    console.error(chalk.red(err instanceof Error ? err.message : String(err)));
+    process.exit(1);
   }
 }
 
-function openOnDevice(device: RunningDevice, url: string): void {
+async function openOnDevice(device: RunningDevice, url: string, bundleId?: string): Promise<void> {
   if (device.platform === 'ios') {
     if (device.kind === 'simulator') openUrlOnSimulator(device.udid, url);
-    else openUrlOnPhysicalIos(device.udid, url);
+    else openUrlOnPhysicalIos(device.udid, url, await resolveBundleId(device.udid, bundleId));
   } else {
     if (device.kind === 'emulator') openUrlOnEmulator(device.serial, url);
     else openUrlOnPhysicalAndroid(device.serial, url);
   }
 }
 
-async function openOnIos(url: string, arg: string | boolean): Promise<void> {
+// devicectl can't route a URL by scheme on a physical device — it launches a
+// specific app with the URL as payload, so we need the target app's bundle id.
+async function resolveBundleId(udid: string, bundleId?: string): Promise<string> {
+  if (bundleId) return bundleId;
+
+  const stop = spinner('Loading installed apps...');
+  let apps;
+  try {
+    apps = listInstalledApps(udid);
+  } finally {
+    stop();
+  }
+
+  if (apps.length === 0) {
+    console.error(chalk.red('No installed apps found on the device.'));
+    console.error(chalk.gray('Pass the target app explicitly with --bundle-id <id>.'));
+    process.exit(1);
+  }
+
+  return selectWithExit('Which app should open the link?', apps.map(a => ({
+    name: `${a.name}  ${chalk.gray(a.bundleId)}`,
+    value: a.bundleId,
+  })));
+}
+
+async function openOnIos(url: string, arg: string | boolean, bundleId?: string): Promise<void> {
   const simulators = runningSimulators();
   const physical = listPhysicalIosDevices();
 
@@ -64,13 +96,13 @@ async function openOnIos(url: string, arg: string | boolean): Promise<void> {
       console.error(chalk.red(`iOS device "${arg}" not found or not connected.`));
       process.exit(1);
     }
-    openOnDevice(device, url);
+    await openOnDevice(device, url, bundleId);
     console.log(chalk.green(`Opened on ${device.name}`));
     return;
   }
 
   if (devices.length === 1) {
-    openOnDevice(devices[0], url);
+    await openOnDevice(devices[0], url, bundleId);
     console.log(chalk.green(`Opened on ${devices[0].name}`));
     return;
   }
@@ -82,7 +114,7 @@ async function openOnIos(url: string, arg: string | boolean): Promise<void> {
     value: d,
   })));
 
-  openOnDevice(device, url);
+  await openOnDevice(device, url, bundleId);
   console.log(chalk.green(`Opened on ${device.name}`));
 }
 
@@ -106,13 +138,13 @@ async function openOnAndroid(url: string, arg: string | boolean): Promise<void> 
       console.error(chalk.red(`Android device "${arg}" not found or not connected.`));
       process.exit(1);
     }
-    openOnDevice(device, url);
+    await openOnDevice(device, url);
     console.log(chalk.green(`Opened on ${device.name}`));
     return;
   }
 
   if (devices.length === 1) {
-    openOnDevice(devices[0], url);
+    await openOnDevice(devices[0], url);
     console.log(chalk.green(`Opened on ${devices[0].name}`));
     return;
   }
@@ -122,11 +154,11 @@ async function openOnAndroid(url: string, arg: string | boolean): Promise<void> 
     value: d,
   })));
 
-  openOnDevice(device, url);
+  await openOnDevice(device, url);
   console.log(chalk.green(`Opened on ${device.name}`));
 }
 
-async function openOnAny(url: string): Promise<void> {
+async function openOnAny(url: string, bundleId?: string): Promise<void> {
   const allDevices: { name: string; value: RunningDevice }[] = [
     ...runningSimulators().map(s => ({
       name: `${s.name}  ${chalk.gray(s.runtime + '  · iOS simulator')}`,
@@ -153,12 +185,12 @@ async function openOnAny(url: string): Promise<void> {
 
   if (allDevices.length === 1) {
     const d = allDevices[0].value;
-    openOnDevice(d, url);
+    await openOnDevice(d, url, bundleId);
     console.log(chalk.green(`Opened on ${d.name}`));
     return;
   }
 
   const device = await selectWithExit('Select a device:', allDevices);
-  openOnDevice(device, url);
+  await openOnDevice(device, url, bundleId);
   console.log(chalk.green(`Opened on ${device.name}`));
 }

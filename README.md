@@ -58,14 +58,13 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 Physical devices are shown in `simon list` and `simon running`, and work with `simon open-link`.
 
 - **Android**: plug in via USB — detected automatically via `adb`
-- **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (Xcode 15+). Opening deep links on physical iOS devices requires `idb`:
-  ```sh
-  brew tap facebook/fb
-  brew install idb-companion
-  brew install pipx
-  pipx ensurepath
-  pipx install fb-idb
-  ```
+- **iOS**: plug in via USB — detected automatically via `xcrun devicectl` (needs full Xcode, not just the Command Line Tools)
+
+Opening a deep link on a physical iOS device uses `xcrun devicectl`. Unlike a simulator, iOS can't auto-route a custom scheme to its app on a real device, so you must say which app opens the link. simon prompts with a picker of the installed apps, or you can pass it directly:
+
+```sh
+simon open-link "myapp://path" -i "My iPhone" -b com.example.myapp
+```
 
 ## Requirements
 
