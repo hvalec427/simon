@@ -1,3 +1,10 @@
+# [2.5.0](https://github.com/hvalec427/simon/compare/v2.4.1...v2.5.0) (2026-10-05)
+
+
+### Features
+
+* add location command to set simulated GPS ([0584af1](https://github.com/hvalec427/simon/commit/0584af12457f263ce393b39c5824d0fd3f5a387d))
+
 ## [2.4.1](https://github.com/hvalec427/simon/compare/v2.4.0...v2.4.1) (2026-10-05)
 
 
