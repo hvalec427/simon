@@ -52,6 +52,8 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon wipe -a` | Wipe all data on an Android emulator (interactive picker) |
 | `simon wipe -i "iPhone 16"` | Wipe a specific iOS simulator |
 | `simon wipe -a Pixel_9_Pro` | Wipe a specific Android emulator |
+| `simon check-update` | Check whether a newer version is available |
+| `simon update` | Download and install the latest version |
 
 ## Physical device support
 

@@ -9,6 +9,8 @@ import { deleteCommand } from './commands/delete.js';
 import { openLinkCommand } from './commands/open-link.js';
 import { wipeCommand } from './commands/wipe.js';
 import { logsCommand } from './commands/logs.js';
+import { checkUpdateCommand } from './commands/check-update.js';
+import { updateCommand } from './commands/update.js';
 
 const program = new Command();
 
@@ -79,6 +81,16 @@ program
   .command('running')
   .description('Show currently running simulators and emulators')
   .action(runningCommand);
+
+program
+  .command('check-update')
+  .description('Check whether a newer version of simon is available')
+  .action(checkUpdateCommand);
+
+program
+  .command('update')
+  .description('Update simon to the latest version')
+  .action(updateCommand);
 
 process.on('uncaughtException', err => {
   if ((err as NodeJS.ErrnoException).name === 'ExitPromptError') process.exit(0);
