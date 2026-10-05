@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/hvalec427/simon/compare/v2.2.0...v2.3.0) (2026-10-05)
+
+
+### Features
+
+* add doctor and push commands ([765fe46](https://github.com/hvalec427/simon/commit/765fe462c1cace64d36572156279a591a7e24fc9))
+
 # [2.2.0](https://github.com/hvalec427/simon/compare/v2.1.0...v2.2.0) (2026-10-05)
 
 
