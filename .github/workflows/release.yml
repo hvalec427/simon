@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  issues: write
+  pull-requests: write
 
 jobs:
   release:
@@ -21,52 +23,10 @@ jobs:
         with:
           node-version: "22"
 
-      - name: Read version from package.json
-        id: version
-        run: echo "value=v$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Generate changelog
-        id: changelog
-        run: |
-          CURRENT="${{ steps.version.outputs.value }}"
-          PREV=$(git tag --sort=-version:refname | grep -v "^${CURRENT}$" | head -1)
-          if [ -n "$PREV" ]; then
-            LOG=$(git log "${PREV}..HEAD" --pretty=format:"- %s" --no-merges)
-          else
-            LOG=$(git log --pretty=format:"- %s" --no-merges)
-          fi
-          if [ -z "$LOG" ]; then LOG="- No changes"; fi
-          {
-            echo "log<<EOF"
-            echo "$LOG"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Bundle
-        run: npm run bundle
-
-      - name: Build arm64 binary
-        run: npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64
-
-      - name: Build x64 binary
-        run: npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
-
-      - name: Create release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.version.outputs.value }}
-          name: ${{ steps.version.outputs.value }}
-          body: |
-            ## What's changed
-            ${{ steps.changelog.outputs.log }}
-
-            ## Install
-            ```sh
-            curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/${{ steps.version.outputs.value }}/install.sh | sh -s ${{ steps.version.outputs.value }}
-            ```
-          files: |
-            simon-darwin-arm64
-            simon-darwin-x64
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npx semantic-release
