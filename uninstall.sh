@@ -1,12 +1,22 @@
 #!/bin/sh
 set -e
 
-INSTALL_DIR="/usr/local/bin"
-
-if [ ! -f "$INSTALL_DIR/simon" ]; then
-  echo "simon is not installed at $INSTALL_DIR/simon"
+TARGET=$(command -v simon 2>/dev/null || true)
+if [ -z "$TARGET" ]; then
+  echo "simon is not on your PATH."
   exit 0
 fi
 
-sudo rm "$INSTALL_DIR/simon"
-echo "simon uninstalled."
+DIR=$(dirname "$TARGET")
+if [ -w "$DIR" ]; then
+  rm "$TARGET"
+else
+  sudo rm "$TARGET"
+fi
+echo "simon uninstalled from $TARGET"
+
+# A second copy may still be on PATH — flag it so uninstall is actually complete.
+NEXT=$(command -v simon 2>/dev/null || true)
+if [ -n "$NEXT" ]; then
+  echo "Note: another copy remains at $NEXT — run this again to remove it."
+fi
