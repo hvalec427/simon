@@ -1,3 +1,10 @@
+## [2.6.1](https://github.com/hvalec427/simon/compare/v2.6.0...v2.6.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* build releases on macOS so Apple Silicon binaries run ([dea72bb](https://github.com/hvalec427/simon/commit/dea72bbf0be3df419c45e5337dbba6be7ba7bccb))
+
 # [2.6.0](https://github.com/hvalec427/simon/compare/v2.5.0...v2.6.0) (2026-10-05)
 
 
