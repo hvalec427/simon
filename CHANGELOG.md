@@ -1,3 +1,10 @@
+# [2.4.0](https://github.com/hvalec427/simon/compare/v2.3.0...v2.4.0) (2026-10-05)
+
+
+### Features
+
+* add --template flag to push for a copy-paste payload ([129ffb9](https://github.com/hvalec427/simon/commit/129ffb9c7eeba4969b93380974ea148e00f5f04e))
+
 # [2.3.0](https://github.com/hvalec427/simon/compare/v2.2.0...v2.3.0) (2026-10-05)
 
 
