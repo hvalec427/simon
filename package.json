@@ -1,7 +1,7 @@
 {
   "name": "simon",
   "version": "2.4.1",
-  "description": "CLI for managing iOS simulators and Android emulators",
+  "description": "CLI for managing real devices and iOS simulators / Android emulators",
   "type": "module",
   "bin": {
     "simon": "./dist/index.js"

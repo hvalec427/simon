@@ -1,6 +1,6 @@
 # simon
 
-A CLI for managing iOS simulators, Android emulators, and connected physical devices — boot, stop, wipe, stream logs, open deep links, and send test push notifications, all from the terminal.
+A CLI for managing both real devices and iOS simulators / Android emulators — boot, stop, wipe, stream logs, open deep links, and send test push notifications, all from the terminal. No more opening Xcode or Android Studio just to boot a simulator.
 
 Built entirely with AI (Claude).
 
