@@ -1,3 +1,17 @@
+# [2.6.0](https://github.com/hvalec427/simon/compare/v2.5.0...v2.6.0) (2026-10-05)
+
+
+### Bug Fixes
+
+* make install/uninstall PATH-aware to avoid stale shadowed binaries ([b5295c0](https://github.com/hvalec427/simon/commit/b5295c02c318716c3067e76d1871313e2404a87c))
+
+
+### Features
+
+* auto-install go-ios and manage the iOS tunnel for real-device location ([0608b93](https://github.com/hvalec427/simon/commit/0608b933c8c4ae813b08e80205c917dacd5de070))
+* stop the iOS tunnel after location --reset ([efed383](https://github.com/hvalec427/simon/commit/efed38325860eae322c26830d1d1393a01007b14))
+* support physical iOS location via go-ios (experimental) ([f48e9af](https://github.com/hvalec427/simon/commit/f48e9afd29297d5f746422ca7c7355a091432c69))
+
 # [2.5.0](https://github.com/hvalec427/simon/compare/v2.4.1...v2.5.0) (2026-10-05)
 
 
