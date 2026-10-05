@@ -3,7 +3,7 @@ import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
-function getSdkRoot(): string {
+export function getSdkRoot(): string {
   return (
     process.env.ANDROID_HOME ||
     process.env.ANDROID_SDK_ROOT ||
@@ -11,7 +11,7 @@ function getSdkRoot(): string {
   );
 }
 
-function findBin(name: 'emulator' | 'adb'): string {
+export function findBin(name: 'emulator' | 'adb'): string {
   const subdir = name === 'emulator' ? 'emulator' : 'platform-tools';
   const full = path.join(getSdkRoot(), subdir, name);
   return existsSync(full) ? full : name;

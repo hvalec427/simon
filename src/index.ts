@@ -11,6 +11,8 @@ import { wipeCommand } from './commands/wipe.js';
 import { logsCommand } from './commands/logs.js';
 import { checkUpdateCommand } from './commands/check-update.js';
 import { updateCommand } from './commands/update.js';
+import { doctorCommand } from './commands/doctor.js';
+import { pushCommand } from './commands/push.js';
 
 const program = new Command();
 
@@ -81,6 +83,18 @@ program
   .command('running')
   .description('Show currently running simulators and emulators')
   .action(runningCommand);
+
+program
+  .command('push <payload>')
+  .description('Send a push notification to an iOS simulator (payload = JSON/apns file)')
+  .option('-i, --ios [name]', 'Target a specific iOS simulator by name')
+  .option('-b, --bundle-id <id>', 'App bundle id (if not set in the payload)')
+  .action(pushCommand);
+
+program
+  .command('doctor')
+  .description('Check your environment for simulator/emulator tooling')
+  .action(doctorCommand);
 
 program
   .command('check-update')
