@@ -23,6 +23,12 @@ jobs:
         with:
           node-version: "22"
 
+      # npm 10 mis-hoists conflicting transitive majors (commitlint vs
+      # semantic-release both pull conventional-commits-filter), producing a
+      # lockfile it then rejects. npm 11 nests them correctly.
+      - name: Pin npm 11
+        run: npm install -g npm@11
+
       - name: Install dependencies
         run: npm ci
 
