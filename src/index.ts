@@ -14,6 +14,7 @@ import { updateCommand } from './commands/update.js';
 import { doctorCommand } from './commands/doctor.js';
 import { pushCommand } from './commands/push.js';
 import { locationCommand } from './commands/location.js';
+import { tunnelCommand } from './commands/tunnel.js';
 
 const program = new Command();
 
@@ -100,6 +101,11 @@ program
   .option('-b, --bundle-id <id>', 'App bundle id (if not set in the payload)')
   .option('-t, --template', 'Print an example payload you can save to a file')
   .action(pushCommand);
+
+program
+  .command('tunnel [action]')
+  .description('Manage the iOS developer tunnel for physical-device commands (start | stop | status)')
+  .action(tunnelCommand);
 
 program
   .command('doctor')

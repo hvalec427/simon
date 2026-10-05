@@ -37,6 +37,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon logs` | Stream logs from a running device (Ctrl+C to stop) |
 | `simon location <lat,lon>` | Set a simulated GPS location on a simulator/emulator |
 | `simon push <payload>` | Send a push notification to an iOS simulator |
+| `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel (physical-device commands) |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` | Check whether a newer version is available |
 | `simon update` | Update simon to the latest version |
@@ -58,7 +59,7 @@ simon launch -i "iPhone 16"  # launch that specific one, no picker
 
 ### Command-specific flags
 
-- `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it (iOS). Works on simulators and emulators natively. **Physical iOS** is supported (experimental) via [go-ios](https://github.com/danielpaulus/go-ios) (`npm install -g go-ios`); on iOS 17+ a developer tunnel must be running first (`sudo ios tunnel start`). **Physical Android** isn't supported — use a mock-location app (e.g. Lockito) in Developer Options.
+- `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it (iOS). Works on simulators and emulators natively. **Physical iOS** is supported (experimental) via [go-ios](https://github.com/danielpaulus/go-ios) — simon installs it automatically if missing and starts the iOS 17+ developer tunnel for you (prompts for `sudo` once). Manage that tunnel yourself with `simon tunnel start|stop|status` if you prefer. **Physical Android** isn't supported — use a mock-location app (e.g. Lockito) in Developer Options.
 - `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
 - `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
 - `push <payload> -b <id>` — target app bundle id (if not baked into the payload)

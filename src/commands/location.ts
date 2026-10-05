@@ -2,6 +2,7 @@ import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { findBin } from '../utils/android.js';
 import { pickRunningDevice } from '../utils/devices.js';
+import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
 
 interface LocationOptions {
   ios?: string | boolean;
@@ -20,21 +21,15 @@ function parseCoords(coords: string): { lat: string; lon: string } | null {
 }
 
 // Physical iOS has no first-party location CLI (devicectl can't do it), so we
-// shell out to go-ios. On iOS 17+ it also needs a developer tunnel running.
+// shell out to go-ios, installing it and starting the developer tunnel as needed.
 function goIos(args: string): void {
-  try {
-    execSync('command -v ios', { stdio: 'ignore' });
-  } catch {
-    throw new Error('go-ios is required to set location on a physical iOS device.\nInstall it:  npm install -g go-ios');
-  }
+  ensureGoIos();
+  ensureTunnel();
   try {
     execSync(`ios ${args}`, { stdio: ['ignore', 'ignore', 'pipe'] });
   } catch (e) {
     const stderr = (e as { stderr?: Buffer }).stderr?.toString().trim().split('\n')[0] ?? '';
-    throw new Error(
-      `go-ios failed${stderr ? `: ${stderr}` : ''}\n` +
-        'On iOS 17+ a developer tunnel must be running first:  sudo ios tunnel start',
-    );
+    throw new Error(`go-ios failed${stderr ? `: ${stderr}` : ''}`);
   }
 }
 
