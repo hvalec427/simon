@@ -25,7 +25,10 @@ export async function pushCommand(payload: string | undefined, options: PushOpti
   if (options.template) {
     // Only the JSON goes to stdout, so `simon push --template > push.json` is clean.
     console.log(JSON.stringify(TEMPLATE, null, 2));
-    console.error(chalk.gray('\nSave it to a file, then: simon push <file> -b <bundle-id>'));
+    // Hint only makes sense in a terminal; skip it when output is redirected to a file.
+    if (process.stdout.isTTY) {
+      console.error(chalk.gray('\nSave it to a file, then: simon push <file> -b <bundle-id>'));
+    }
     return;
   }
 
