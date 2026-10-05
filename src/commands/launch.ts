@@ -1,13 +1,11 @@
 import chalk from 'chalk';
 import { launchAvd, listAvds } from '../utils/android.js';
 import { bootSimulator, listSimulators } from '../utils/ios.js';
-import { loadPrefs } from '../utils/prefs.js';
 import { selectWithExit } from '../utils/prompt.js';
 
 interface LaunchOptions {
   ios?: string | boolean;
   android?: string | boolean;
-  pick?: boolean;
 }
 
 export async function launchCommand(options: LaunchOptions): Promise<void> {
@@ -16,11 +14,11 @@ export async function launchCommand(options: LaunchOptions): Promise<void> {
     process.exit(1);
   }
 
-  if (options.ios !== undefined) await launchIos(options.ios, options.pick);
-  if (options.android !== undefined) await launchAndroid(options.android, options.pick);
+  if (options.ios !== undefined) await launchIos(options.ios);
+  if (options.android !== undefined) await launchAndroid(options.android);
 }
 
-async function launchIos(arg: string | boolean, pick?: boolean): Promise<void> {
+async function launchIos(arg: string | boolean): Promise<void> {
   const sims = listSimulators();
   if (sims.length === 0) {
     console.error(chalk.red('No iOS simulators found. Install one via Xcode → Settings → Platforms.'));
@@ -39,16 +37,6 @@ async function launchIos(arg: string | boolean, pick?: boolean): Promise<void> {
     return;
   }
 
-  const prefs = loadPrefs();
-  if (!pick && prefs.ios) {
-    const preferred = sims.find(s => s.udid === prefs.ios);
-    if (preferred) {
-      console.log(chalk.cyan(`Launching preferred: ${preferred.name}...`));
-      bootSimulator(preferred.udid);
-      return;
-    }
-  }
-
   const sim = await selectWithExit('Select an iOS simulator:', sims.map(s => ({
     name: `${s.name}  ${chalk.gray(s.runtime)}${s.state === 'Booted' ? chalk.green('  ● running') : ''}`,
     value: s,
@@ -58,7 +46,7 @@ async function launchIos(arg: string | boolean, pick?: boolean): Promise<void> {
   bootSimulator(sim.udid);
 }
 
-async function launchAndroid(arg: string | boolean, pick?: boolean): Promise<void> {
+async function launchAndroid(arg: string | boolean): Promise<void> {
   const avds = listAvds();
   if (avds.length === 0) {
     console.error(chalk.red('No Android emulators found. Create one via Android Studio → Device Manager.'));
@@ -73,13 +61,6 @@ async function launchAndroid(arg: string | boolean, pick?: boolean): Promise<voi
     }
     console.log(chalk.cyan(`Launching ${arg}...`));
     launchAvd(arg);
-    return;
-  }
-
-  const prefs = loadPrefs();
-  if (!pick && prefs.android && avds.includes(prefs.android)) {
-    console.log(chalk.cyan(`Launching preferred: ${prefs.android}...`));
-    launchAvd(prefs.android);
     return;
   }
 
