@@ -1,3 +1,10 @@
+## [2.4.1](https://github.com/hvalec427/simon/compare/v2.4.0...v2.4.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* only show push template hint in an interactive terminal ([a1a74c1](https://github.com/hvalec427/simon/commit/a1a74c19a4c729086f51952b39e910d59269e2bb))
+
 # [2.4.0](https://github.com/hvalec427/simon/compare/v2.3.0...v2.4.0) (2026-10-05)
 
 
