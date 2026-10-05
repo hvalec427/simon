@@ -11,6 +11,7 @@
     "bundle": "node scripts/bundle.mjs",
     "build:binary": "npm run bundle && pkg bundle.cjs --targets node22-macos-arm64,node22-macos-x64 --out-path bin",
     "dev": "tsx src/index.ts",
+    "test": "vitest run",
     "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
@@ -36,6 +37,7 @@
     "husky": "^9.1.7",
     "semantic-release": "^25.0.9",
     "tsx": "^4.19.4",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^5.0.3"
   }
 }
