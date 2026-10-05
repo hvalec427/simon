@@ -2,7 +2,7 @@ import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { findBin } from '../utils/android.js';
 import { pickRunningDevice } from '../utils/devices.js';
-import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
+import { ensureGoIos, ensureTunnel, stopTunnel } from '../utils/goios.js';
 
 interface LocationOptions {
   ios?: string | boolean;
@@ -59,9 +59,12 @@ export async function locationCommand(coords: string | undefined, options: Locat
       if (device.kind === 'simulator') {
         if (options.reset) execSync(`xcrun simctl location "${device.udid}" clear`);
         else execSync(`xcrun simctl location "${device.udid}" set ${parsed!.lat},${parsed!.lon}`);
+      } else if (options.reset) {
+        goIos(`resetlocation --udid=${device.udid}`);
+        // Clean up: the tunnel was only needed to clear the location.
+        if (stopTunnel()) console.log(chalk.gray('Stopped the iOS developer tunnel.'));
       } else {
-        if (options.reset) goIos(`resetlocation --udid=${device.udid}`);
-        else goIos(`setlocation --lat=${parsed!.lat} --lon=${parsed!.lon} --udid=${device.udid}`);
+        goIos(`setlocation --lat=${parsed!.lat} --lon=${parsed!.lon} --udid=${device.udid}`);
       }
     } else {
       if (device.kind === 'physical') {
