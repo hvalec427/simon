@@ -87,7 +87,7 @@ program
 
 program
   .command('location [coords]')
-  .description('Set a simulated GPS location (coords as "lat,lon") on a simulator or emulator')
+  .description('Set a simulated GPS location (coords as "lat,lon") on a simulator, emulator, or physical iOS device')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .option('-r, --reset', 'Clear the simulated location (iOS simulators)')

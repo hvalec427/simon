@@ -19,6 +19,25 @@ function parseCoords(coords: string): { lat: string; lon: string } | null {
   return { lat, lon };
 }
 
+// Physical iOS has no first-party location CLI (devicectl can't do it), so we
+// shell out to go-ios. On iOS 17+ it also needs a developer tunnel running.
+function goIos(args: string): void {
+  try {
+    execSync('command -v ios', { stdio: 'ignore' });
+  } catch {
+    throw new Error('go-ios is required to set location on a physical iOS device.\nInstall it:  npm install -g go-ios');
+  }
+  try {
+    execSync(`ios ${args}`, { stdio: ['ignore', 'ignore', 'pipe'] });
+  } catch (e) {
+    const stderr = (e as { stderr?: Buffer }).stderr?.toString().trim().split('\n')[0] ?? '';
+    throw new Error(
+      `go-ios failed${stderr ? `: ${stderr}` : ''}\n` +
+        'On iOS 17+ a developer tunnel must be running first:  sudo ios tunnel start',
+    );
+  }
+}
+
 export async function locationCommand(coords: string | undefined, options: LocationOptions): Promise<void> {
   const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
   const name = typeof options.ios === 'string' ? options.ios
@@ -38,14 +57,23 @@ export async function locationCommand(coords: string | undefined, options: Locat
     }
   }
 
-  // Location can only be set on simulators/emulators, so physical devices are excluded.
-  const device = await pickRunningDevice('Select a device to set location on:', filter, name, true);
+  const device = await pickRunningDevice('Select a device to set location on:', filter, name);
 
   try {
     if (device.platform === 'ios') {
-      if (options.reset) execSync(`xcrun simctl location "${device.udid}" clear`);
-      else execSync(`xcrun simctl location "${device.udid}" set ${parsed!.lat},${parsed!.lon}`);
+      if (device.kind === 'simulator') {
+        if (options.reset) execSync(`xcrun simctl location "${device.udid}" clear`);
+        else execSync(`xcrun simctl location "${device.udid}" set ${parsed!.lat},${parsed!.lon}`);
+      } else {
+        if (options.reset) goIos(`resetlocation --udid=${device.udid}`);
+        else goIos(`setlocation --lat=${parsed!.lat} --lon=${parsed!.lon} --udid=${device.udid}`);
+      }
     } else {
+      if (device.kind === 'physical') {
+        console.error(chalk.red('Setting location on a physical Android device is not supported.'));
+        console.error(chalk.gray('Use a mock-location app (e.g. Lockito) selected in Developer Options → "Select mock location app".'));
+        process.exit(1);
+      }
       if (options.reset) {
         console.error(chalk.yellow('Android emulators have no location reset — set a new location instead.'));
         process.exit(1);
