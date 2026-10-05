@@ -70,3 +70,16 @@ simon open-link "myapp://path" -i "My iPhone" -b com.example.myapp
 
 - **iOS**: macOS with Xcode installed
 - **Android**: Android SDK (`ANDROID_HOME` set, or SDK at `~/Library/Android/sdk`)
+
+## Releasing
+
+Releases are automated with [semantic-release](https://semantic-release.gitbook.io/). Versioning and changelog come from commit messages, so commits must follow [Conventional Commits](https://www.conventionalcommits.org/) (enforced locally by a commitlint git hook):
+
+| Prefix | Example | Release |
+|---|---|---|
+| `fix:` | `fix: handle missing udid` | patch (x.y.**z**) |
+| `feat:` | `feat: add logs filter` | minor (x.**y**.0) |
+| `feat!:` / `BREAKING CHANGE:` in body | `feat!: drop prefer command` | major (**x**.0.0) |
+| `chore:`, `docs:`, `ci:`, `refactor:`, `test:` | `chore: bump deps` | no release |
+
+On every push to `master`, CI analyzes the new commits, bumps the version, writes `CHANGELOG.md`, builds the macOS binaries, and publishes a GitHub Release with a matching `vX.Y.Z` tag. Don't edit the version in `package.json` by hand.
