@@ -1,3 +1,10 @@
+# [2.7.0](https://github.com/hvalec427/simon/compare/v2.6.1...v2.7.0) (2026-10-05)
+
+
+### Features
+
+* support physical Android location via a bundled helper app ([702c01d](https://github.com/hvalec427/simon/commit/702c01d3eb12993fad12e54933f7ab785f4c70a1))
+
 ## [2.6.1](https://github.com/hvalec427/simon/compare/v2.6.0...v2.6.1) (2026-10-05)
 
 
