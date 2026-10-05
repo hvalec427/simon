@@ -145,10 +145,22 @@ function ensureDevicectl(): void {
 export function openUrlOnPhysicalIos(udid: string, url: string, bundleId?: string): void {
   ensureDevicectl();
   const target = bundleId ?? 'com.apple.mobilesafari';
-  execSync(
-    `xcrun devicectl device process launch --terminate-existing ` +
-      `--payload-url "${url}" --device "${udid}" "${target}" 2>/dev/null`
-  );
+  try {
+    execSync(
+      `xcrun devicectl device process launch --terminate-existing ` +
+        `--payload-url "${url}" --device "${udid}" "${target}"`,
+      { stdio: ['ignore', 'ignore', 'pipe'] },
+    );
+  } catch (e) {
+    const stderr = (e as { stderr?: Buffer }).stderr?.toString() ?? '';
+    const detail = stderr.split('\n').map(l => l.trim()).find(Boolean) ?? '';
+    let msg = `Failed to open the link on the device${detail ? `:\n  ${detail}` : '.'}`;
+    if (bundleId) {
+      msg += `\nCheck that "${bundleId}" is the app's exact bundle id — list installed apps with:\n` +
+        `  xcrun devicectl device info apps --device "${udid}"`;
+    }
+    throw new Error(msg);
+  }
 }
 
 export function runningSimulators(): Simulator[] {
