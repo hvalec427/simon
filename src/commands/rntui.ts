@@ -21,10 +21,37 @@ export function filterRecords(records: NetRecord[], filter: string): NetRecord[]
   return records.filter(r => `${r.method} ${r.url}`.toLowerCase().includes(f));
 }
 
+// Extract a GraphQL operation name from a request body (operationName, else the
+// name in the query/mutation/subscription, else "anonymous"). Handles batches.
+export function graphqlOperation(rec: NetRecord): string | undefined {
+  if (!rec.reqBody) return undefined;
+  let body: any;
+  try {
+    body = JSON.parse(rec.reqBody);
+  } catch {
+    return undefined;
+  }
+  const pick = (o: any): string | undefined => {
+    if (!o || typeof o !== 'object') return undefined;
+    if (o.operationName) return String(o.operationName);
+    if (typeof o.query === 'string') {
+      const m = o.query.match(/\b(query|mutation|subscription)\s+(\w+)/);
+      return m ? m[2] : 'anonymous';
+    }
+    return undefined;
+  };
+  if (Array.isArray(body)) {
+    const ops = body.map(pick).filter(Boolean);
+    return ops.length ? ops.join(', ') : undefined;
+  }
+  return pick(body);
+}
+
 export function netSummary(rec: NetRecord): { text: string; error: boolean; pending: boolean } {
   const pending = rec.status === undefined;
+  const op = graphqlOperation(rec);
   return {
-    text: `${pending ? '···' : rec.status}  ${rec.method} ${rec.url}`,
+    text: `${pending ? '···' : rec.status}  ${rec.method} ${rec.url}${op ? `  ${op}` : ''}`,
     error: typeof rec.status === 'number' && rec.status >= 400,
     pending,
   };
@@ -48,9 +75,11 @@ function bodyLines(b?: string): string[] {
 }
 
 export function netDetailLines(rec: NetRecord): string[] {
+  const op = graphqlOperation(rec);
   return [
     `${rec.method} ${rec.url}`,
     `Status: ${rec.status ?? '(pending)'}${rec.mimeType ? `  ·  ${rec.mimeType}` : ''}`,
+    ...(op ? [`GraphQL: ${op}`] : []),
     '',
     '── Request headers ──',
     ...headerLines(rec.reqHeaders),
@@ -75,6 +104,20 @@ export function logDetailLines(e: LogEntry): string[] {
     /* not JSON — raw (may be multi-line) */
   }
   return text.split('\n');
+}
+
+// The wrapped lines shown in the detail/preview view — shared by the renderer
+// and the runtime's scroll/search so they agree on line positions.
+export function detailViewLines(s: FrameState, item: LogEntry | NetRecord, cols: number): string[] {
+  const raw = s.detailLoading
+    ? ['Fetching object…']
+    : s.detailLines && s.detailLines.length
+    ? s.detailLines
+    : s.tab === 'logs'
+    ? logDetailLines(item as LogEntry)
+    : netDetailLines(item as NetRecord);
+  // Wrap long lines so everything is reachable by scrolling (nothing cut off).
+  return raw.flatMap(l => wrap(oneLine(l), cols));
 }
 
 export function frameHeight(rows: number, deviceBar: boolean): number {
@@ -184,7 +227,7 @@ export function renderFrame(s: FrameState): string {
 
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
-  else if (s.detail) foot = ' ⏎/esc close · ↑↓/jk g scroll · q quit';
+  else if (s.detail) foot = ` ⏎/esc close · ↑↓/jk scroll · g/G top/bottom · / search${s.search ? ' · n/N' : ''} · q quit`;
   else
     foot =
       ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand` +
@@ -207,15 +250,7 @@ export function renderFrame(s: FrameState): string {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
   } else if (s.detail && len > 0) {
-    const raw = s.detailLoading
-      ? ['Fetching object…']
-      : s.detailLines && s.detailLines.length
-      ? s.detailLines
-      : isLogs
-      ? logDetailLines(items[effSel] as LogEntry)
-      : netDetailLines(items[effSel] as NetRecord);
-    // Wrap long lines so everything is reachable by scrolling (nothing cut off).
-    const dl = raw.flatMap(l => wrap(oneLine(l), cols));
+    const dl = detailViewLines(s, items[effSel], cols);
     const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
     for (let i = 0; i < h; i++) {
       const l = dl[start + i];
@@ -391,6 +426,30 @@ export function runRnTui(port: number, nameFilter?: string): void {
     closeDetail();
   }
 
+  // Wrapped detail lines for the current selection (matches what renderFrame draws).
+  function detailLinesNow(): string[] {
+    const list = items();
+    if (!list.length) return [];
+    const effSel = follow ? list.length - 1 : Math.min(sel[tab], list.length - 1);
+    return detailViewLines(
+      { tab, detailLines, detailLoading } as FrameState,
+      list[effSel],
+      process.stdout.columns ?? 80,
+    );
+  }
+
+  // Scroll to the next/previous detail line matching the search term.
+  function jumpDetail(dir: 1 | -1): void {
+    if (!search) return;
+    const dl = detailLinesNow();
+    const t = search.toLowerCase();
+    const hits = dl.flatMap((l, i) => (l.toLowerCase().includes(t) ? [i] : []));
+    if (!hits.length) return;
+    let next = dir === 1 ? hits.find(i => i > detailScroll) : [...hits].reverse().find(i => i < detailScroll);
+    if (next === undefined) next = dir === 1 ? hits[0] : hits[hits.length - 1];
+    detailScroll = next;
+  }
+
   function jump(dir: 1 | -1): void {
     if (!search) return;
     const t = search.toLowerCase();
@@ -411,7 +470,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     if (mode !== 'normal') {
       if (key.name === 'return') {
         mode = 'normal';
-        if (search) jump(1);
+        if (search) (detail ? jumpDetail : jump)(1);
       } else if (key.name === 'escape') {
         if (mode === 'search') search = '';
         mode = 'normal';
@@ -431,12 +490,20 @@ export function runRnTui(port: number, nameFilter?: string): void {
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
 
     if (detail) {
+      const h = height();
+      const max = Math.max(0, detailLinesNow().length - h);
       if (key.name === 'return' || key.name === 'escape') closeDetail();
+      else if (str === '/') {
+        mode = 'search';
+        input = search;
+      } else if (str === 'n') jumpDetail(1);
+      else if (str === 'N') jumpDetail(-1);
       else if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
-      else if (key.name === 'down' || str === 'j') detailScroll += 1;
-      else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - height());
-      else if (key.name === 'pagedown') detailScroll += height();
+      else if (key.name === 'down' || str === 'j') detailScroll = Math.min(max, detailScroll + 1);
+      else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - h);
+      else if (key.name === 'pagedown') detailScroll = Math.min(max, detailScroll + h);
       else if (str === 'g') detailScroll = 0;
+      else if (str === 'G') detailScroll = max;
       render();
       return;
     }

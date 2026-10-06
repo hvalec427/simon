@@ -5,6 +5,7 @@ import {
   filterEntries,
   filterRecords,
   frameHeight,
+  graphqlOperation,
   highlight,
   logDetailLines,
   netDetailLines,
@@ -213,6 +214,25 @@ describe('netSummary', () => {
   });
   it('marks pending when there is no status yet', () => {
     expect(netSummary({ id: '2', method: 'GET', url: 'u' }).pending).toBe(true);
+  });
+});
+
+describe('graphqlOperation / netSummary', () => {
+  it('uses operationName when present', () => {
+    const rec: NetRecord = { id: '1', method: 'POST', url: '/graphql', reqBody: JSON.stringify({ operationName: 'GetOrders', query: 'query GetOrders { x }' }) };
+    expect(graphqlOperation(rec)).toBe('GetOrders');
+    expect(netSummary(rec).text).toContain('GetOrders');
+  });
+  it('falls back to the name in the query', () => {
+    expect(graphqlOperation({ id: '2', method: 'POST', url: '/g', reqBody: '{"query":"mutation ClaimOrder { y }"}' })).toBe('ClaimOrder');
+  });
+  it('handles anonymous and batched operations', () => {
+    expect(graphqlOperation({ id: '3', method: 'POST', url: '/g', reqBody: '{"query":"{ me }"}' })).toBe('anonymous');
+    expect(graphqlOperation({ id: '4', method: 'POST', url: '/g', reqBody: '[{"operationName":"A","query":"query A{x}"},{"operationName":"B","query":"query B{y}"}]' })).toBe('A, B');
+  });
+  it('returns undefined for non-GraphQL requests', () => {
+    expect(graphqlOperation({ id: '5', method: 'GET', url: '/rest' })).toBeUndefined();
+    expect(graphqlOperation({ id: '6', method: 'POST', url: '/x', reqBody: 'not json' })).toBeUndefined();
   });
 });
 
