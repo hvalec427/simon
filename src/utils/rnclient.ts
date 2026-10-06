@@ -95,6 +95,7 @@ export class RnClient extends EventEmitter {
   private targets: TargetInfo[] = [];
   private selectedKey?: string;
   private netRecords = new Map<string, NetRecord>();
+  private cmdSeq = 1000;
 
   constructor(private port: number, private nameFilter?: string, private retryMs = 2000) {
     super();
@@ -106,6 +107,18 @@ export class RnClient extends EventEmitter {
     if (!t) return;
     this.selectedKey = t.key;
     this.reconnectNow();
+  }
+
+  // Ask the app to reload (like the "r" in React Native DevTools). Best-effort:
+  // sends whichever reload the connected target understands.
+  reloadApp(): void {
+    if (!this.ws) return;
+    try {
+      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Page.reload' }));
+      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'ReactNativeApplication.reload' }));
+    } catch {
+      /* ignore */
+    }
   }
 
   start(): void {
@@ -244,6 +257,12 @@ export class RnClient extends EventEmitter {
             : msg.result.body;
           this.emit('net', rec);
         }
+        return;
+      }
+      // Fast refresh / reload resets the JS context — treat as a reload.
+      if (msg.method === 'Runtime.executionContextsCleared') {
+        this.netRecords.clear();
+        this.emit('contextcleared');
         return;
       }
       if (typeof msg.method === 'string' && msg.method.startsWith('Network.')) {

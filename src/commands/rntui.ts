@@ -42,7 +42,7 @@ function bodyLines(b?: string): string[] {
   try {
     text = JSON.stringify(JSON.parse(b), null, 2);
   } catch {
-    /* not JSON — show raw */
+    /* not JSON — raw */
   }
   return text.split('\n').map(l => `  ${l}`);
 }
@@ -66,11 +66,39 @@ export function netDetailLines(rec: NetRecord): string[] {
   ];
 }
 
+// Expand a log entry: pretty-print JSON if it is one, else show its lines as-is.
+export function logDetailLines(e: LogEntry): string[] {
+  let text = e.text;
+  try {
+    text = JSON.stringify(JSON.parse(e.text), null, 2);
+  } catch {
+    /* not JSON — raw (may be multi-line) */
+  }
+  return text.split('\n');
+}
+
 export function frameHeight(rows: number, deviceBar: boolean): number {
   return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
 }
 
-// The TUI paints its own theme so it's legible on any terminal background.
+export function highlight(text: string, term: string): string {
+  if (!term) return text;
+  const lower = text.toLowerCase();
+  const t = term.toLowerCase();
+  let out = '';
+  let i = 0;
+  while (i < text.length) {
+    const hit = lower.indexOf(t, i);
+    if (hit === -1) {
+      out += text.slice(i);
+      break;
+    }
+    out += text.slice(i, hit) + chalk.inverse(text.slice(hit, hit + term.length));
+    i = hit + term.length;
+  }
+  return out;
+}
+
 const PANEL_BG = '#1e1e2e';
 const BAR_BG = '#3b4252';
 const panel = (s: string) => chalk.bgHex(PANEL_BG)(s);
@@ -99,8 +127,6 @@ function pad(s: string, width: number): string {
   return s.length > width ? s.slice(0, width) : s + ' '.repeat(width - s.length);
 }
 
-// Collapse newlines/tabs so one entry is exactly one screen row (embedded
-// newlines would otherwise add rows and scroll the header off-screen).
 function oneLine(s: string): string {
   return s.replace(/[\r\n\t]+/g, ' ');
 }
@@ -115,11 +141,10 @@ export interface FrameState {
   tab: Tab;
   buffers: Record<Tab, LogEntry[]>;
   netRecords: NetRecord[];
-  netSel: number;
+  sel: number;
+  follow: boolean;
   detail: boolean;
   detailScroll: number;
-  scroll: number;
-  follow: boolean;
   filter: string;
   search: string;
   mode: 'normal' | 'filter' | 'search';
@@ -135,6 +160,7 @@ export function renderFrame(s: FrameState): string {
   const cols = s.cols;
   const hasDeviceBar = s.targets.length > 1;
   const h = frameHeight(s.rows, hasDeviceBar);
+  const isLogs = s.tab === 'logs';
 
   const tabBar = TABS.map(t => {
     const count = t === 'logs' ? s.buffers.logs.length : s.netRecords.length;
@@ -142,16 +168,16 @@ export function renderFrame(s: FrameState): string {
     return t === s.tab ? `[${label}]` : ` ${label} `;
   }).join(' ');
 
-  const head = ` ${s.who || '…'} · ${s.status}${s.filter ? ` · filter:"${s.filter}"` : ''}   ${tabBar}`;
-  const onRestart = `p: ${s.clearOnRestart ? 'clears' : 'keeps'} logs on app restart`;
+  const restart = `${s.clearOnRestart ? 'clears' : 'keeps'} logs on restart`;
+  const head = ` ${s.who || '…'} · ${s.status}${s.filter ? ` · filter:"${s.filter}"` : ''} · ${restart}   ${tabBar}`;
 
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
-  else if (s.tab === 'network' && s.detail) foot = ' esc back  ↑↓/jk scroll  q quit';
-  else if (s.tab === 'network')
-    foot = ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  enter details  / search  f filter  c clear  ↑↓/jk select  q quit`;
+  else if (s.detail) foot = ' ⏎/esc close · ↑↓/jk g scroll · q quit';
   else
-    foot = ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  / search  f filter${s.search ? '  n/N next' : ''}  c clear  ${onRestart}  r reconnect  ↑↓/jk scroll  q quit`;
+    foot =
+      ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand` +
+      ` · a autoscroll:${s.follow ? 'on' : 'off'} · g/G scroll · c clear · R reload · r reconnect · p restart · q quit`;
 
   const lines: string[] = [bar(pad(head, cols))];
   if (hasDeviceBar) {
@@ -162,41 +188,38 @@ export function renderFrame(s: FrameState): string {
   }
 
   const body: string[] = [];
-  if (s.tab === 'network') {
-    if (s.networkSupported === false && s.netRecords.length === 0) {
-      body.push(chalk.yellowBright(pad(' Network isn’t exposed over CDP by this React Native version.', cols)));
-    } else if (s.detail) {
-      const rec = filterRecords(s.netRecords, s.filter)[s.netSel];
-      const dl = rec ? netDetailLines(rec) : ['(no request selected)'];
-      const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
-      for (let i = 0; i < h; i++) {
-        const l = dl[start + i];
-        body.push(l === undefined ? '' : highlight(oneLine(l).slice(0, cols), s.search));
-      }
-    } else {
-      const recs = filterRecords(s.netRecords, s.filter);
-      const sel = clamp(s.netSel, 0, Math.max(0, recs.length - 1));
-      const start = clamp(sel - Math.floor(h / 2), 0, Math.max(0, recs.length - h));
-      for (let i = 0; i < h; i++) {
-        const rec = recs[start + i];
-        if (!rec) {
-          body.push('');
-          continue;
-        }
-        const sum = netSummary(rec);
-        const line = pad(oneLine(sum.text).slice(0, cols), cols);
-        const colored = sum.error ? chalk.redBright(line) : chalk.whiteBright(line);
-        body.push(start + i === sel ? chalk.inverse(line) : colored);
-      }
+  const items: (LogEntry | NetRecord)[] = isLogs ? filterEntries(s.buffers.logs, s.filter) : filterRecords(s.netRecords, s.filter);
+  const len = items.length;
+  const effSel = s.follow ? len - 1 : clamp(s.sel, 0, Math.max(0, len - 1));
+
+  if (s.tab === 'network' && s.networkSupported === false && s.netRecords.length === 0) {
+    body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
+    while (body.length < h) body.push('');
+  } else if (s.detail && len > 0) {
+    const dl = isLogs ? logDetailLines(items[effSel] as LogEntry) : netDetailLines(items[effSel] as NetRecord);
+    const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
+    for (let i = 0; i < h; i++) {
+      const l = dl[start + i];
+      body.push(l === undefined ? '' : highlight(oneLine(l).slice(0, cols), s.search));
     }
   } else {
-    const vis = filterEntries(s.buffers[s.tab], s.filter);
-    const maxStart = Math.max(0, vis.length - h);
-    const start = s.follow ? maxStart : Math.min(Math.max(0, s.scroll), maxStart);
-    const window = vis.slice(start, start + h);
+    const start = s.follow ? Math.max(0, len - h) : clamp(effSel - Math.floor(h / 2), 0, Math.max(0, len - h));
     for (let i = 0; i < h; i++) {
-      const e = window[i];
-      body.push(e ? levelColor(e)(highlight(pad(oneLine(e.text).slice(0, cols), cols), s.search)) : '');
+      const idx = start + i;
+      const item = items[idx];
+      if (!item) {
+        body.push('');
+        continue;
+      }
+      const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
+      const text = pad(oneLine(rawText).slice(0, cols), cols);
+      if (!s.follow && idx === effSel) {
+        body.push(chalk.inverse(text));
+      } else if (isLogs) {
+        body.push(levelColor(item as LogEntry)(highlight(text, s.search)));
+      } else {
+        body.push(netSummary(item as NetRecord).error ? chalk.redBright(text) : chalk.whiteBright(text));
+      }
     }
   }
 
@@ -206,36 +229,15 @@ export function renderFrame(s: FrameState): string {
   return '\x1b[H\x1b[2J' + lines.join('\n');
 }
 
-export function highlight(text: string, term: string): string {
-  if (!term) return text;
-  const lower = text.toLowerCase();
-  const t = term.toLowerCase();
-  let out = '';
-  let i = 0;
-  while (i < text.length) {
-    const hit = lower.indexOf(t, i);
-    if (hit === -1) {
-      out += text.slice(i);
-      break;
-    }
-    out += text.slice(i, hit) + chalk.inverse(text.slice(hit, hit + term.length));
-    i = hit + term.length;
-  }
-  return out;
-}
-
 // ── TUI runtime ─────────────────────────────────────────────────────────────
 
 export function runRnTui(port: number, nameFilter?: string): void {
   const buffers: Record<Tab, LogEntry[]> = { logs: [], network: [] };
   let netRecords: NetRecord[] = [];
-  let netSel = 0;
+  const sel: Record<Tab, number> = { logs: 0, network: 0 };
+  let follow = true;
   let detail = false;
   let detailScroll = 0;
-  const view: Record<Tab, { scroll: number; follow: boolean }> = {
-    logs: { scroll: 0, follow: true },
-    network: { scroll: 0, follow: true },
-  };
   let tab: Tab = 'logs';
   let filter = '';
   let search = '';
@@ -269,7 +271,6 @@ export function runRnTui(port: number, nameFilter?: string): void {
     if (s === 'connected') {
       if (wasDisconnected && clearOnRestart) {
         buffers.logs.length = 0;
-        buffers.network.length = 0;
         netRecords = [];
       }
       wasDisconnected = false;
@@ -282,17 +283,24 @@ export function runRnTui(port: number, nameFilter?: string): void {
     networkSupported = ok;
     render();
   });
+  client.on('contextcleared', () => {
+    // App reloaded (fast refresh / manual reload) — honour the clear toggle.
+    if (clearOnRestart) {
+      buffers.logs.length = 0;
+      netRecords = [];
+    }
+    render();
+  });
   client.on('targets', (list: TargetInfo[]) => {
     targets = list;
     render();
   });
 
-  function height(): number {
-    return frameHeight(process.stdout.rows ?? 24, targets.length > 1);
-  }
+  const height = () => frameHeight(process.stdout.rows ?? 24, targets.length > 1);
+  const items = () => (tab === 'logs' ? filterEntries(buffers.logs, filter) : filterRecords(netRecords, filter));
+  const count = () => items().length;
 
   function render(): void {
-    const v = view[tab];
     process.stdout.write(
       renderFrame({
         cols: process.stdout.columns ?? 80,
@@ -300,11 +308,10 @@ export function runRnTui(port: number, nameFilter?: string): void {
         tab,
         buffers,
         netRecords,
-        netSel,
+        sel: sel[tab],
+        follow,
         detail,
         detailScroll,
-        scroll: v.scroll,
-        follow: v.follow,
         filter,
         search,
         mode,
@@ -325,26 +332,32 @@ export function runRnTui(port: number, nameFilter?: string): void {
     process.exit(0);
   }
 
+  function switchTab(dir: 1 | -1): void {
+    tab = TABS[(TABS.indexOf(tab) + dir + TABS.length) % TABS.length];
+    detail = false;
+  }
+
   function jump(dir: 1 | -1): void {
-    const vis = filterEntries(buffers.logs, filter);
     if (!search) return;
     const t = search.toLowerCase();
-    const hits = vis.flatMap((e, i) => (e.text.toLowerCase().includes(t) ? [i] : []));
+    const list = items();
+    const hits = list.flatMap((it, i) => {
+      const text = tab === 'logs' ? (it as LogEntry).text : `${(it as NetRecord).method} ${(it as NetRecord).url}`;
+      return text.toLowerCase().includes(t) ? [i] : [];
+    });
     if (!hits.length) return;
-    const v = view.logs;
-    const current = v.follow ? Math.max(0, vis.length - height()) : v.scroll;
-    let next = dir === 1 ? hits.find(i => i > current) : [...hits].reverse().find(i => i < current);
+    const base = follow ? list.length - 1 : sel[tab];
+    let next = dir === 1 ? hits.find(i => i > base) : [...hits].reverse().find(i => i < base);
     if (next === undefined) next = dir === 1 ? hits[0] : hits[hits.length - 1];
-    v.follow = false;
-    v.scroll = next;
+    follow = false;
+    sel[tab] = next;
   }
 
   function onKey(str: string | undefined, key: { name?: string; ctrl?: boolean }): void {
-    // text entry for filter/search
     if (mode !== 'normal') {
       if (key.name === 'return') {
         mode = 'normal';
-        if (search && tab === 'logs') jump(1);
+        if (search) jump(1);
       } else if (key.name === 'escape') {
         if (mode === 'search') search = '';
         mode = 'normal';
@@ -363,9 +376,8 @@ export function runRnTui(port: number, nameFilter?: string): void {
 
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
 
-    // network detail view
-    if (tab === 'network' && detail) {
-      if (key.name === 'escape' || str === 'q') detail = false;
+    if (detail) {
+      if (key.name === 'return' || key.name === 'escape') detail = false;
       else if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
       else if (key.name === 'down' || str === 'j') detailScroll += 1;
       else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - height());
@@ -376,7 +388,21 @@ export function runRnTui(port: number, nameFilter?: string): void {
     }
 
     const h = height();
-    // shared keys
+    const n = count();
+    const base = follow ? n - 1 : sel[tab];
+    const toLast = () => {
+      follow = true;
+      sel[tab] = Math.max(0, n - 1);
+    };
+    const toIndex = (i: number) => {
+      const next = clamp(i, 0, Math.max(0, n - 1));
+      if (next >= n - 1) toLast();
+      else {
+        follow = false;
+        sel[tab] = next;
+      }
+    };
+
     if (str === '[') switchTab(-1);
     else if (str === ']') switchTab(1);
     else if (str === '/') {
@@ -387,56 +413,40 @@ export function runRnTui(port: number, nameFilter?: string): void {
       input = filter;
     } else if (str === 'c') {
       buffers.logs.length = 0;
-      buffers.network.length = 0;
       netRecords = [];
+    } else if (str === 'p') clearOnRestart = !clearOnRestart;
+    else if (str === 'a') {
+      follow = !follow;
+      if (follow) sel[tab] = Math.max(0, n - 1);
     } else if (str && /^[1-9]$/.test(str)) {
       const idx = Number(str) - 1;
       if (idx < targets.length) {
         buffers.logs.length = 0;
-        buffers.network.length = 0;
         netRecords = [];
         client.select(idx);
       }
     } else if (str === 'r') client.reconnectNow();
-    else if (tab === 'network') {
-      // network list navigation
-      const recs = filterRecords(netRecords, filter);
-      if (key.name === 'return') {
-        if (recs.length) {
-          detail = true;
-          detailScroll = 0;
-        }
-      } else if (key.name === 'up' || str === 'k') netSel = Math.max(0, netSel - 1);
-      else if (key.name === 'down' || str === 'j') netSel = Math.min(recs.length - 1, netSel + 1);
-      else if (key.name === 'pageup') netSel = Math.max(0, netSel - h);
-      else if (key.name === 'pagedown') netSel = Math.min(recs.length - 1, netSel + h);
-      else if (str === 'g') netSel = 0;
-      else if (str === 'G') netSel = Math.max(0, recs.length - 1);
-    } else {
-      // logs scrolling
-      const v = view.logs;
-      if (str === 'p') clearOnRestart = !clearOnRestart;
-      else if (str === 'n') jump(1);
-      else if (str === 'N') jump(-1);
-      else if (key.name === 'up' || str === 'k') {
-        v.follow = false;
-        v.scroll = Math.max(0, v.scroll - 1);
-      } else if (key.name === 'down' || str === 'j') v.scroll += 1;
-      else if (key.name === 'pageup') {
-        v.follow = false;
-        v.scroll = Math.max(0, v.scroll - h);
-      } else if (key.name === 'pagedown') v.scroll += h;
-      else if (str === 'g') {
-        v.follow = false;
-        v.scroll = 0;
-      } else if (str === 'G') v.follow = true;
-    }
+    else if (str === 'R') client.reloadApp();
+    else if (key.name === 'return') {
+      if (n > 0) {
+        detail = true;
+        detailScroll = 0;
+      }
+    } else if (str === 'n') jump(1);
+    else if (str === 'N') jump(-1);
+    else if (key.name === 'up' || str === 'k') {
+      follow = false;
+      sel[tab] = clamp(base - 1, 0, Math.max(0, n - 1));
+    } else if (key.name === 'down' || str === 'j') toIndex(base + 1);
+    else if (key.name === 'pageup') {
+      follow = false;
+      sel[tab] = clamp(base - h, 0, Math.max(0, n - 1));
+    } else if (key.name === 'pagedown') toIndex(base + h);
+    else if (str === 'g') {
+      follow = false;
+      sel[tab] = 0;
+    } else if (str === 'G') toLast();
     render();
-  }
-
-  function switchTab(dir: 1 | -1): void {
-    tab = TABS[(TABS.indexOf(tab) + dir + TABS.length) % TABS.length];
-    detail = false;
   }
 
   process.stdout.write('\x1b[?1049h\x1b[?25l\x1b[?7l');

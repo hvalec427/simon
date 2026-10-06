@@ -6,6 +6,7 @@ import {
   filterRecords,
   frameHeight,
   highlight,
+  logDetailLines,
   netDetailLines,
   netSummary,
   renderFrame,
@@ -69,11 +70,10 @@ function frame(partial: Partial<FrameState>): string {
     tab: 'logs',
     buffers: { logs: [], network: [] },
     netRecords: [],
-    netSel: 0,
+    sel: 0,
+    follow: true,
     detail: false,
     detailScroll: 0,
-    scroll: 0,
-    follow: true,
     filter: '',
     search: '',
     mode: 'normal',
@@ -113,7 +113,7 @@ describe('renderFrame', () => {
     expect(f).toContain('Network (0)');
     expect(f).toContain('iPhone');
     expect(f).toContain('connected');
-    expect(f).toContain('keeps logs on app restart');
+    expect(f).toContain('keeps logs on restart');
     expect(f).toContain('hello world');
   });
 
@@ -134,7 +134,7 @@ describe('renderFrame', () => {
   });
 
   it('describes clear-on-restart when toggled', () => {
-    expect(frame({ clearOnRestart: true })).toContain('clears logs on app restart');
+    expect(frame({ clearOnRestart: true })).toContain('clears logs on restart');
   });
 
   it('notes when network is unsupported on the network tab', () => {
@@ -146,7 +146,7 @@ describe('renderFrame', () => {
     expect(f).toContain('Devices:');
     expect(f).toContain('1:iPhone');
     expect(f).toContain('2:Pixel');
-    expect(f).toContain('1-9 device');
+    expect(f).toContain('1-9 dev');
   });
 
   it('lists network records on the network tab', () => {
@@ -156,7 +156,7 @@ describe('renderFrame', () => {
     });
     expect(f).toContain('200');
     expect(f).toContain('POST https://api/x');
-    expect(f).toContain('enter details');
+    expect(f).toContain('expand');
   });
 
   it('renders a request detail view', () => {
@@ -173,7 +173,25 @@ describe('renderFrame', () => {
     expect(f).toContain('Request headers');
     expect(f).toContain('content-type: application/json');
     expect(f).toContain('Response body');
-    expect(f).toContain('esc back');
+    expect(f).toContain('close');
+  });
+
+  it('expands a log entry into pretty-printed detail', () => {
+    const f = frame({
+      detail: true,
+      rows: 20,
+      buffers: { logs: [{ kind: 'console', level: 'log', text: '{"user":"ziga","n":2}' }], network: [] },
+    });
+    expect(f).toContain('"user": "ziga"');
+  });
+});
+
+describe('logDetailLines', () => {
+  it('pretty-prints JSON log text', () => {
+    expect(logDetailLines({ kind: 'console', level: 'log', text: '{"a":1}' }).join('\n')).toContain('"a": 1');
+  });
+  it('keeps non-JSON multi-line text as separate lines', () => {
+    expect(logDetailLines({ kind: 'console', level: 'error', text: 'boom\n at foo' })).toEqual(['boom', ' at foo']);
   });
 });
 
