@@ -131,6 +131,15 @@ function oneLine(s: string): string {
   return s.replace(/[\r\n\t]+/g, ' ');
 }
 
+// Wrap a plain line into width-sized chunks so long values aren't cut off in
+// the (scrollable) detail view.
+function wrap(s: string, width: number): string[] {
+  if (s.length <= width) return [s];
+  const out: string[] = [];
+  for (let i = 0; i < s.length; i += width) out.push(s.slice(i, i + width));
+  return out;
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(Math.max(n, lo), hi);
 }
@@ -196,11 +205,13 @@ export function renderFrame(s: FrameState): string {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
   } else if (s.detail && len > 0) {
-    const dl = isLogs ? logDetailLines(items[effSel] as LogEntry) : netDetailLines(items[effSel] as NetRecord);
+    const raw = isLogs ? logDetailLines(items[effSel] as LogEntry) : netDetailLines(items[effSel] as NetRecord);
+    // Wrap long lines so everything is reachable by scrolling (nothing cut off).
+    const dl = raw.flatMap(l => wrap(oneLine(l), cols));
     const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
     for (let i = 0; i < h; i++) {
       const l = dl[start + i];
-      body.push(l === undefined ? '' : highlight(oneLine(l).slice(0, cols), s.search));
+      body.push(l === undefined ? '' : highlight(l, s.search));
     }
   } else {
     const start = s.follow ? Math.max(0, len - h) : clamp(effSel - Math.floor(h / 2), 0, Math.max(0, len - h));
