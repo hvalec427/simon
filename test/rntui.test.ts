@@ -190,7 +190,7 @@ describe('renderFrame', () => {
     });
     expect(f).toContain('200');
     expect(f).toContain('POST https://api/x');
-    expect(f).toContain('expand');
+    expect(f).toContain('preview');
   });
 
   it('renders a request detail view', () => {
@@ -236,7 +236,41 @@ describe('renderFrame', () => {
     expect(f).toContain('alpha-row'); // list still visible (left pane)
     expect(f).toContain('"user": "ziga"'); // detail (right pane)
     expect(f).toContain('│'); // column separator
-    expect(f).toContain('JK scroll detail'); // footer reflects split-pane controls
+    expect(f).toContain('JK scroll'); // footer reflects split-pane controls
+  });
+
+  it('maximizes the preview to full width (no separator)', () => {
+    const f = frame({
+      detail: true,
+      maximized: true,
+      rows: 20,
+      buffers: { logs: [{ kind: 'console', level: 'log', text: '{"user":"ziga"}' }], network: [] },
+      sel: 0,
+      follow: false,
+    });
+    expect(f).toContain('"user": "ziga"');
+    expect(f).toContain('restore'); // footer shows the restore toggle
+    expect(f).not.toContain('│'); // list hidden → no column separator
+  });
+
+  it('paints the active match differently from other matches', () => {
+    const f = frame({
+      search: 'ab',
+      detail: false,
+      buffers: {
+        logs: [
+          { kind: 'console', level: 'log', text: 'ab one' }, // selected → current match
+          { kind: 'console', level: 'log', text: 'ab two' }, // other match
+        ],
+        network: [],
+      },
+      sel: 0,
+      follow: false,
+    });
+    const CURRENT = '\x1b[103m'; // bgYellowBright
+    const OTHER = '\x1b[106m'; // bgCyanBright
+    expect(f).toContain(CURRENT);
+    expect(f).toContain(OTHER);
   });
 });
 

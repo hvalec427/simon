@@ -156,12 +156,16 @@ export function frameHeight(rows: number, deviceBar: boolean): number {
   return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
 }
 
-// Explicit search-match style so it reads the same on the colored list and on
-// the plain detail view (chalk.inverse looked gray on uncoloured detail text).
-const hlMatch = chalk.bgCyanBright.black;
+type Style = (s: string) => string;
+// The active match (where n/N / the selection sits) vs every other match.
+const hlCurrent = chalk.bgYellowBright.black;
+const hlOther = chalk.bgCyanBright.black;
 
-export function highlight(text: string, term: string): string {
-  if (!term) return text;
+// Paint a line by styling non-match and match runs independently, then
+// concatenating — avoids nested-chalk reset bugs so a base style (e.g. a
+// selection bar) survives across highlighted matches.
+export function paint(text: string, term: string, base: Style, match: Style): string {
+  if (!term) return base(text);
   const lower = text.toLowerCase();
   const t = term.toLowerCase();
   let out = '';
@@ -169,13 +173,19 @@ export function highlight(text: string, term: string): string {
   while (i < text.length) {
     const hit = lower.indexOf(t, i);
     if (hit === -1) {
-      out += text.slice(i);
+      out += base(text.slice(i));
       break;
     }
-    out += text.slice(i, hit) + hlMatch(text.slice(hit, hit + term.length));
+    if (hit > i) out += base(text.slice(i, hit));
+    out += match(text.slice(hit, hit + term.length));
     i = hit + term.length;
   }
   return out;
+}
+
+// Back-compat helper: highlight matches on otherwise-unstyled text.
+export function highlight(text: string, term: string): string {
+  return paint(text, term, s => s, hlOther);
 }
 
 const PANEL_BG = '#1e1e2e';
@@ -232,7 +242,9 @@ export interface FrameState {
   sel: number;
   follow: boolean;
   detail: boolean;
+  maximized?: boolean; // preview pane fills the width (list hidden)
   detailScroll: number;
+  detailHit?: number; // index of the active match line in the detail view
   detailLines?: string[] | null; // fetched deep-object tree (logs); overrides the default
   detailLoading?: boolean;
   filter: string;
@@ -271,10 +283,13 @@ export function renderFrame(s: FrameState): string {
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
   else if (s.flash) foot = ` ${s.flash}`;
-  else if (s.detail) foot = ` ⏎/esc close · jk list · JK scroll detail · / search${s.search ? ' · n/N' : ''} · y copy · q quit`;
+  else if (s.detail)
+    foot =
+      ` ⏎/esc close · z ${s.maximized ? 'restore' : 'maximize'} · jk list · JK scroll · / search${s.search ? ' · n/N' : ''}` +
+      ` · y copy${isLogs ? '' : ' · c/C curl'} · q quit`;
   else
     foot =
-      ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand · y copy` +
+      ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search${s.search ? ' · n/N' : ''} · f filter · ⏎ preview · z max · y copy` +
       (isLogs ? '' : ' · C curl · e errors · m method') +
       ` · space/a scroll:${s.follow ? 'on' : 'off'} · g/G · c clear · R reload · r reconnect · p restart · q quit`;
 
@@ -293,9 +308,39 @@ export function renderFrame(s: FrameState): string {
   const len = items.length;
   const effSel = s.follow ? len - 1 : clamp(s.sel, 0, Math.max(0, len - 1));
 
+  // A list row, highlighted so matches always show. The selected row is the
+  // active match (current style) only when we're searching the list itself —
+  // i.e. the preview is closed; otherwise the active match lives in the pane.
+  const listRow = (item: LogEntry | NetRecord, width: number, selected: boolean): string => {
+    const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
+    const t = pad(oneLine(rawText).slice(0, width), width);
+    const base: Style = selected
+      ? chalk.inverse
+      : isLogs
+      ? levelColor(item as LogEntry)
+      : netSummary(item as NetRecord).error
+      ? chalk.redBright
+      : chalk.whiteBright;
+    const matchStyle: Style = selected && !s.detail ? hlCurrent : hlOther;
+    return paint(t, s.search, base, matchStyle);
+  };
+
+  // A detail-pane line; the active match line gets the current style.
+  const detailLine = (dl: string[], absIdx: number, width: number): string => {
+    const dline = dl[absIdx];
+    if (dline === undefined) return pad('', width);
+    const txt = pad(oneLine(dline).slice(0, width), width);
+    return paint(txt, s.search, x => x, absIdx === s.detailHit ? hlCurrent : hlOther);
+  };
+
   if (s.tab === 'network' && s.networkSupported === false && s.netRecords.length === 0) {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
+  } else if (s.detail && s.maximized && len > 0) {
+    // Maximized: the preview fills the full width (list hidden).
+    const dl = detailViewLines(s, items[effSel], cols);
+    const dStart = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
+    for (let i = 0; i < h; i++) body.push(detailLine(dl, dStart + i, cols));
   } else if (s.detail && len > 0) {
     // Side-by-side: list on the left, detail pane on the right.
     const sep = chalk.gray('│');
@@ -307,38 +352,15 @@ export function renderFrame(s: FrameState): string {
     for (let i = 0; i < h; i++) {
       const idx = listStart + i;
       const item = items[idx];
-      let left: string;
-      if (!item) {
-        left = pad('', leftW);
-      } else {
-        const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
-        const t = pad(oneLine(rawText).slice(0, leftW), leftW);
-        if (idx === effSel) left = chalk.inverse(t);
-        else if (isLogs) left = levelColor(item as LogEntry)(t);
-        else left = netSummary(item as NetRecord).error ? chalk.redBright(t) : chalk.whiteBright(t);
-      }
-      const dline = dl[dStart + i];
-      const right = dline === undefined ? pad('', rightW) : highlight(pad(oneLine(dline).slice(0, rightW), rightW), s.search);
-      body.push(left + sep + right);
+      const left = item ? listRow(item, leftW, idx === effSel) : pad('', leftW);
+      body.push(left + sep + detailLine(dl, dStart + i, rightW));
     }
   } else {
     const start = s.follow ? Math.max(0, len - h) : clamp(effSel - Math.floor(h / 2), 0, Math.max(0, len - h));
     for (let i = 0; i < h; i++) {
       const idx = start + i;
       const item = items[idx];
-      if (!item) {
-        body.push('');
-        continue;
-      }
-      const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
-      const text = pad(oneLine(rawText).slice(0, cols), cols);
-      if (idx === effSel) {
-        body.push(chalk.inverse(text));
-      } else if (isLogs) {
-        body.push(levelColor(item as LogEntry)(highlight(text, s.search)));
-      } else {
-        body.push(netSummary(item as NetRecord).error ? chalk.redBright(text) : chalk.whiteBright(text));
-      }
+      body.push(item ? listRow(item, cols, idx === effSel) : '');
     }
   }
 
@@ -364,6 +386,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   const sel: Record<Tab, number> = { logs: 0, network: 0 };
   let follow = true;
   let detail = false;
+  let maximized = false;
   let detailScroll = 0;
   let detailHit = -1; // last search-matched detail line (for n/N + context offset)
   let detailLines: string[] | null = null;
@@ -462,7 +485,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
         sel: sel[tab],
         follow,
         detail,
+        maximized,
         detailScroll,
+        detailHit,
         detailLines,
         detailLoading,
         filter,
@@ -490,6 +515,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
 
   function closeDetail(): void {
     detail = false;
+    maximized = false;
     detailLines = null;
     detailLoading = false;
     detailHit = -1;
@@ -541,16 +567,22 @@ export function runRnTui(port: number, nameFilter?: string): void {
     closeDetail();
   }
 
+  // Width of the detail pane as renderFrame draws it (full width when maximized,
+  // otherwise the right ~55% of the split). Kept in sync so match/scroll indices
+  // line up with what's on screen.
+  function detailWidth(): number {
+    const cols = process.stdout.columns ?? 80;
+    if (maximized) return cols;
+    const leftW = Math.max(16, Math.floor(cols * 0.45));
+    return Math.max(1, cols - leftW - 1);
+  }
+
   // Wrapped detail lines for the current selection (matches what renderFrame draws).
   function detailLinesNow(): string[] {
     const list = items();
     if (!list.length) return [];
     const effSel = follow ? list.length - 1 : Math.min(sel[tab], list.length - 1);
-    return detailViewLines(
-      { tab, detailLines, detailLoading } as FrameState,
-      list[effSel],
-      process.stdout.columns ?? 80,
-    );
+    return detailViewLines({ tab, detailLines, detailLoading } as FrameState, list[effSel], detailWidth());
   }
 
   const CONTEXT = 3; // lines of context to keep above a jumped-to match
@@ -589,20 +621,11 @@ export function runRnTui(port: number, nameFilter?: string): void {
     sel[tab] = next;
   }
 
-  // Live-follow the first match at/after the cursor as the search term is typed.
+  // Live-follow the first match as the search term is typed — but only on the
+  // list. With the preview open, typing just updates highlights; use n/N to
+  // step through the pane's matches.
   function jumpFirst(): void {
-    if (!search) return;
-    if (detail) {
-      const dl = detailLinesNow();
-      const t = search.toLowerCase();
-      const from = detailHit >= 0 ? detailHit : detailScroll;
-      const hits = dl.flatMap((l, i) => (l.toLowerCase().includes(t) ? [i] : []));
-      if (!hits.length) return;
-      const next = hits.find(i => i >= from) ?? hits[0];
-      detailHit = next;
-      detailScroll = Math.max(0, next - CONTEXT);
-      return;
-    }
+    if (!search || detail) return;
     const hits = matchIndexes();
     if (!hits.length) return;
     const base = follow ? 0 : sel[tab];
@@ -721,9 +744,15 @@ export function runRnTui(port: number, nameFilter?: string): void {
       mode = 'filter';
       input = filter;
     } else if (str === 'c') {
+      // While inspecting a row, c copies it (network → curl); otherwise it clears.
+      if (detail) return tab === 'network' ? copyCurl() : copySelection();
       active().logs.length = 0;
       active().net.length = 0;
       if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
+    } else if (str === 'z') {
+      // Toggle a full-width (maximized) preview; open one if none is up.
+      if (!detail) openDetail();
+      maximized = !maximized;
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str === 'y') return copySelection();
     else if (str === 'C') return copyCurl();
