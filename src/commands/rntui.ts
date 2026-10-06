@@ -99,6 +99,12 @@ function pad(s: string, width: number): string {
   return s.length > width ? s.slice(0, width) : s + ' '.repeat(width - s.length);
 }
 
+// Collapse newlines/tabs so one entry is exactly one screen row (embedded
+// newlines would otherwise add rows and scroll the header off-screen).
+function oneLine(s: string): string {
+  return s.replace(/[\r\n\t]+/g, ' ');
+}
+
 function clamp(n: number, lo: number, hi: number): number {
   return Math.min(Math.max(n, lo), hi);
 }
@@ -165,7 +171,7 @@ export function renderFrame(s: FrameState): string {
       const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
       for (let i = 0; i < h; i++) {
         const l = dl[start + i];
-        body.push(l === undefined ? '' : highlight(l.slice(0, cols), s.search));
+        body.push(l === undefined ? '' : highlight(oneLine(l).slice(0, cols), s.search));
       }
     } else {
       const recs = filterRecords(s.netRecords, s.filter);
@@ -178,7 +184,7 @@ export function renderFrame(s: FrameState): string {
           continue;
         }
         const sum = netSummary(rec);
-        const line = pad(sum.text.slice(0, cols), cols);
+        const line = pad(oneLine(sum.text).slice(0, cols), cols);
         const colored = sum.error ? chalk.redBright(line) : chalk.whiteBright(line);
         body.push(start + i === sel ? chalk.inverse(line) : colored);
       }
@@ -190,7 +196,7 @@ export function renderFrame(s: FrameState): string {
     const window = vis.slice(start, start + h);
     for (let i = 0; i < h; i++) {
       const e = window[i];
-      body.push(e ? levelColor(e)(highlight(pad(e.text.slice(0, cols), cols), s.search)) : '');
+      body.push(e ? levelColor(e)(highlight(pad(oneLine(e.text).slice(0, cols), cols), s.search)) : '');
     }
   }
 

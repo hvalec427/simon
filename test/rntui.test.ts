@@ -96,6 +96,17 @@ describe('frameHeight', () => {
 });
 
 describe('renderFrame', () => {
+  it('always renders exactly `rows` lines, even with multi-line entries', () => {
+    const f = frame({
+      rows: 12,
+      buffers: {
+        logs: [{ kind: 'console', level: 'error', text: 'Error: boom\n  at foo()\n  at bar()' }],
+        network: [],
+      },
+    });
+    expect(f.replace('\x1b[H\x1b[2J', '').split('\n')).toHaveLength(12);
+  });
+
   it('renders header, tab counts and log text', () => {
     const f = frame({ buffers: { logs: [{ kind: 'console', level: 'log', text: 'hello world' }], network: [] } });
     expect(f).toContain('Logs (1)');
