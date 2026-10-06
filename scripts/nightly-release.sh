@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Cut a nightly prerelease from develop. Uses a timestamp as the prerelease
-# identifier (e.g. 2.15.0-nightly.20261006120000) so releases sort correctly
-# both numerically and lexicographically — and avoids semantic-release's
-# git-notes push, which GitHub intermittently rejects.
+# Cut a nightly prerelease from develop. Runs once a day (scheduled), tagged with
+# the Slovenia calendar date (e.g. 2.16.0-nightly.20261007) — one build per day,
+# so no timestamp is needed. Avoids semantic-release's git-notes push, which
+# GitHub intermittently rejects.
 set -euo pipefail
 
 REPO="hvalec427/simon"
@@ -16,11 +16,28 @@ MAJOR=$(echo "$LATEST" | cut -d. -f1)
 MINOR=$(echo "$LATEST" | cut -d. -f2)
 BASE="${MAJOR}.$((MINOR + 1)).0"
 
-TS=$(date -u +%Y%m%d%H%M%S)
+# Previous nightly = the one with the highest date suffix. Don't use
+# --sort=creatordate: lightweight tags tie on date and fall back to ascending
+# refname, picking the oldest nightly.
+PREV=$(git tag -l 'v*-nightly.*' | sort -t. -k4,4 -n | tail -1)
+[ -z "${PREV}" ] && PREV="v${LATEST}"
+RANGE="${PREV}..HEAD"
+
+# Skip the build entirely when nothing that affects the binary changed since the
+# last nightly (docs/markdown-only commits don't warrant a new build).
+if git rev-parse "${PREV}" >/dev/null 2>&1; then
+  CODE_CHANGES=$(git diff --name-only "${PREV}" HEAD -- . ':(exclude)docs/**' ':(exclude)*.md' ':(exclude)LICENSE')
+  if [ -z "${CODE_CHANGES}" ]; then
+    echo "No code changes since ${PREV} — skipping nightly."
+    exit 0
+  fi
+fi
+
+TS=$(TZ='Europe/Ljubljana' date +%Y%m%d)
 VERSION="${BASE}-nightly.${TS}"
 TAG="v${VERSION}"
 
-echo "Building nightly ${TAG} (latest stable: ${LATEST})"
+echo "Building nightly ${TAG} (latest stable: ${LATEST}, since ${PREV})"
 
 # Inline the version into the binary (bundle.mjs reads package.json).
 npm version "${VERSION}" --no-git-tag-version --allow-same-version >/dev/null
@@ -30,13 +47,7 @@ npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
 
 # ── Release notes: a real changelog of everything since the previous nightly
 # (falling back to the latest stable), grouped like the stable releases, plus a
-# copy-paste install line for this exact build. Nightlies only.
-# Previous nightly = the one with the highest timestamp suffix (monotonic, set
-# by date -u at build time). Don't use --sort=creatordate: lightweight tags tie
-# on date and fall back to ascending refname, picking the oldest nightly.
-PREV=$(git tag -l 'v*-nightly.*' | sort -t. -k4,4 -n | tail -1)
-[ -z "${PREV}" ] && PREV="v${LATEST}"
-RANGE="${PREV}..HEAD"
+# copy-paste install line for this exact build.
 echo "Changelog range: ${RANGE}"
 
 NOTES=$(mktemp)

@@ -3,8 +3,14 @@ name: Build & Release
 on:
   push:
     branches:
-      - master   # stable releases
-      - develop  # nightly prereleases
+      - master   # stable releases (on merge from develop)
+  schedule:
+    # Nightly from develop, once a day. Cron is UTC; 23:00 UTC ≈ midnight in
+    # Slovenia (00:00 CET in winter, 01:00 CEST in summer — GitHub cron can't
+    # follow DST). The build is skipped if there are no code changes since the
+    # last nightly, and it's tagged with the Ljubljana calendar date.
+    - cron: "0 23 * * *"
+  workflow_dispatch: {} # manual nightly on demand
 
 permissions:
   contents: write
@@ -29,6 +35,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Scheduled/manual runs check out the default branch (master); nightlies
+      # must build from develop.
+      - name: Build from develop (nightly)
+        if: github.event_name != 'push'
+        run: |
+          git fetch origin develop --tags
+          git checkout -B develop origin/develop
+
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
@@ -45,9 +59,10 @@ jobs:
       - name: Test
         run: npm test
 
-      # develop → timestamped nightly prerelease (custom; no semantic-release notes).
+      # Scheduled/manual → date-stamped nightly prerelease from develop (custom;
+      # no semantic-release notes). Skips itself if there are no code changes.
       - name: Nightly release
-        if: github.ref == 'refs/heads/develop'
+        if: github.event_name != 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/nightly-release.sh
@@ -55,7 +70,7 @@ jobs:
       # Rule: a stable release must only contain commits already shipped to a
       # nightly — i.e. every new non-merge commit must be on develop.
       - name: Enforce stable comes from develop
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           git fetch origin develop
           PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-nightly' | head -1)
@@ -72,11 +87,11 @@ jobs:
 
       # master → stable release via semantic-release.
       - name: Fetch git notes
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: git fetch origin "+refs/notes/*:refs/notes/*" || true
 
       - name: Stable release
-        if: github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
