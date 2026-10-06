@@ -106,7 +106,21 @@ export class RnClient extends EventEmitter {
     const t = this.targets[index];
     if (!t) return;
     this.selectedKey = t.key;
+    this.netRecords.clear();
     this.reconnectNow();
+  }
+
+  // Clear persists across reconnects only if the device forgets its console
+  // history — otherwise Hermes replays it on the next Runtime.enable.
+  discardConsole(): void {
+    this.netRecords.clear();
+    if (!this.ws) return;
+    try {
+      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Runtime.discardConsoleEntries' }));
+      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Log.clear' }));
+    } catch {
+      /* ignore */
+    }
   }
 
   // Ask the app to reload (like the "r" in React Native DevTools). Best-effort:

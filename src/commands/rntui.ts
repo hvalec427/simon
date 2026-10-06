@@ -414,6 +414,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === 'c') {
       buffers.logs.length = 0;
       netRecords = [];
+      client.discardConsole(); // so a reconnect/device-switch won't replay them
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str === 'a') {
       follow = !follow;
