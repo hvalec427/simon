@@ -62,10 +62,11 @@ program
 
 program
   .command('logs')
-  .description('Stream logs from a running simulator or emulator')
-  .option('-i, --ios [name]', 'Stream logs from iOS simulator')
-  .option('-a, --android [name]', 'Stream logs from Android emulator')
+  .description('Stream logs from a running simulator, emulator, or physical device')
+  .option('-i, --ios [name]', 'Stream logs from iOS simulator or device')
+  .option('-a, --android [name]', 'Stream logs from Android emulator or device')
   .option('-f, --filter <expression>', 'Filter expression (predicate for iOS, regex for Android)')
+  .option('--app <name>', 'Show only this app\'s logs (process/app name; bundle id also works on iOS simulators)')
   .action(logsCommand);
 
 program
