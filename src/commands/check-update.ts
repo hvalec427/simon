@@ -2,8 +2,8 @@ import chalk from 'chalk';
 import { spinner } from '../utils/prompt.js';
 import {
   Channel,
+  changelogSince,
   currentVersion,
-  fetchReleaseNotes,
   latestForChannel,
   loadChannel,
   platformSupported,
@@ -43,9 +43,9 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
     return;
   }
 
-  const notes = await fetchReleaseNotes(latest.tag);
+  const notes = await changelogSince(channel, current);
   if (notes) {
-    console.log(chalk.bold("\nWhat's new:"));
+    console.log(chalk.bold(`\nWhat's new (${current} → ${latest.version}):`));
     console.log(chalk.gray(notes));
   }
   const flag = options.nightly ? ' --nightly' : options.stable ? ' --stable' : '';

@@ -3,8 +3,8 @@ import { spinner } from '../utils/prompt.js';
 import {
   Channel,
   currentVersion,
+  changelogSince,
   downloadBinary,
-  fetchReleaseNotes,
   installBinary,
   installTarget,
   latestForChannel,
@@ -58,10 +58,10 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
 
   console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
 
-  const notes = await fetchReleaseNotes(latest.tag);
+  const notes = await changelogSince(channel, current);
   if (notes) {
     console.log();
-    console.log(chalk.bold("What's new:"));
+    console.log(chalk.bold(`What's new (${current} → ${latest.version}):`));
     console.log(chalk.gray(notes));
     console.log();
   }

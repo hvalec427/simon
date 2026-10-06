@@ -3,7 +3,14 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
-import { compareVersions, fetchReleaseNotes, installTarget, latestForChannel, needsSudo } from '../src/utils/update';
+import {
+  changelogSince,
+  compareVersions,
+  fetchReleaseNotes,
+  installTarget,
+  latestForChannel,
+  needsSudo,
+} from '../src/utils/update';
 
 vi.mock('child_process', () => ({ execSync: vi.fn(() => '') }));
 
@@ -67,6 +74,46 @@ describe('latestForChannel', () => {
   it('throws when no nightly exists', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [{ tag_name: 'v2.2.0', prerelease: false }] })));
     await expect(latestForChannel('nightly')).rejects.toThrow();
+  });
+});
+
+describe('changelogSince', () => {
+  const list = [
+    { tag_name: 'v2.2.0-nightly.3', prerelease: true, body: 'n3 notes\n### Install this build\n```sh\ncurl\n```' },
+    { tag_name: 'v2.2.0', prerelease: false, body: 'stable two-two notes' },
+    { tag_name: 'v2.2.0-nightly.2', prerelease: true, body: 'n2 notes' },
+    { tag_name: 'v2.2.0-nightly.1', prerelease: true, body: 'n1 notes' },
+  ];
+  const stub = () => vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => list })));
+
+  it('aggregates channel releases newer than current, newest first, stripping install', async () => {
+    stub();
+    const out = (await changelogSince('nightly', '2.2.0-nightly.1')) ?? '';
+    expect(out).toContain('## v2.2.0-nightly.3');
+    expect(out).toContain('## v2.2.0-nightly.2');
+    expect(out).not.toContain('nightly.1'); // current itself excluded
+    expect(out).not.toContain('stable two-two'); // other channel excluded
+    expect(out).not.toContain('Install this build'); // stripped
+    expect(out.indexOf('nightly.3')).toBeLessThan(out.indexOf('nightly.2')); // newest first
+  });
+
+  it('stable channel ignores prereleases', async () => {
+    stub();
+    const out = (await changelogSince('stable', '2.1.0')) ?? '';
+    expect(out).toContain('## v2.2.0');
+    expect(out).not.toContain('nightly');
+  });
+
+  it('unknown current → just the latest release', async () => {
+    stub();
+    const out = (await changelogSince('nightly', 'unknown')) ?? '';
+    expect(out).toContain('## v2.2.0-nightly.3');
+    expect(out).not.toContain('nightly.2');
+  });
+
+  it('returns undefined when nothing is newer', async () => {
+    stub();
+    expect(await changelogSince('nightly', '2.2.0-nightly.3')).toBeUndefined();
   });
 });
 

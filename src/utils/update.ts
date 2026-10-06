@@ -65,19 +65,52 @@ export async function latestForChannel(channel: Channel): Promise<{ version: str
   return { version: nightly.tag_name.replace(/^v/, ''), tag: nightly.tag_name };
 }
 
-// Release notes (markdown body) for a tag, with the per-build "Install this
-// build" section trimmed off (not useful mid-update). Returns undefined on any
+// Drop the per-build "Install this build" section from a release body — not
+// useful when we're already installing.
+function stripInstall(body: string): string {
+  return (body ?? '').split(/\n#+\s*Install this build/i)[0].trim();
+}
+
+// Release notes (markdown body) for a single tag. Returns undefined on any
 // failure — notes are a nicety, never block an update on them.
 export async function fetchReleaseNotes(tag: string): Promise<string | undefined> {
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${tag}`, { headers: GH_HEADERS });
     if (!res.ok) return undefined;
     const data = (await res.json()) as { body?: string };
-    const body = (data.body ?? '').split(/\n#+\s*Install this build/i)[0].trim();
-    return body || undefined;
+    return stripInstall(data.body ?? '') || undefined;
   } catch {
     return undefined;
   }
+}
+
+// Aggregated changelog for every release in `channel` newer than `current`,
+// newest first (stable → stable releases only; nightly → prereleases only). If
+// the current version is unknown, just the latest release's notes. Capped so a
+// long gap doesn't flood the terminal.
+export async function changelogSince(channel: Channel, current: string): Promise<string | undefined> {
+  let releases: { tag_name: string; prerelease: boolean; body?: string }[];
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100`, { headers: GH_HEADERS });
+    if (!res.ok) return undefined;
+    releases = (await res.json()) as typeof releases;
+  } catch {
+    return undefined;
+  }
+
+  const inChannel = releases
+    .filter(r => (channel === 'stable' ? !r.prerelease : r.prerelease))
+    .sort((a, b) => compareVersions(b.tag_name.replace(/^v/, ''), a.tag_name.replace(/^v/, '')));
+  if (!inChannel.length) return undefined;
+
+  const known = current !== 'unknown' && /^\d/.test(current);
+  const newer = known ? inChannel.filter(r => compareVersions(r.tag_name.replace(/^v/, ''), current) > 0) : inChannel.slice(0, 1);
+  if (!newer.length) return undefined;
+
+  const MAX = 25;
+  const sections = newer.slice(0, MAX).map(r => `## ${r.tag_name}\n\n${stripInstall(r.body ?? '') || '_(no notes)_'}`);
+  if (newer.length > MAX) sections.push(`_… and ${newer.length - MAX} older release(s)._`);
+  return sections.join('\n\n');
 }
 
 // Compare versions incl. `-nightly.N` prereleases: 1 if a > b, -1 if a < b, else 0.
