@@ -83,7 +83,7 @@ export class RnClient extends EventEmitter {
   private targets: TargetInfo[] = [];
   private selectedKey?: string;
 
-  constructor(private port: number, private nameFilter?: string) {
+  constructor(private port: number, private nameFilter?: string, private retryMs = 2000) {
     super();
   }
 
@@ -125,7 +125,7 @@ export class RnClient extends EventEmitter {
   private retryLater(): void {
     if (this.stopped) return;
     this.emit('status', 'disconnected');
-    this.timer = setTimeout(() => this.connect(), 2000);
+    this.timer = setTimeout(() => this.connect(), this.retryMs);
   }
 
   private async connect(): Promise<void> {

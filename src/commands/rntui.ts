@@ -32,6 +32,10 @@ export function highlight(text: string, term: string): string {
   return out;
 }
 
+export function frameHeight(rows: number, deviceBar: boolean): number {
+  return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
+}
+
 function levelColor(e: LogEntry): (s: string) => string {
   if (e.kind === 'network') return e.level === 'error' ? chalk.red : chalk.gray;
   switch (e.level) {
@@ -55,7 +59,74 @@ function pad(s: string, width: number): string {
   return s.length > width ? s.slice(0, width) : s + ' '.repeat(width - s.length);
 }
 
-// ── TUI ─────────────────────────────────────────────────────────────────────
+export interface FrameState {
+  cols: number;
+  rows: number;
+  tab: Tab;
+  buffers: Record<Tab, LogEntry[]>;
+  scroll: number;
+  follow: boolean;
+  filter: string;
+  search: string;
+  mode: 'normal' | 'filter' | 'search';
+  input: string;
+  clearOnRestart: boolean;
+  status: Status;
+  who: string;
+  networkSupported?: boolean;
+  targets: TargetInfo[];
+}
+
+// Build the full screen frame as a string (pure → snapshot-testable).
+export function renderFrame(s: FrameState): string {
+  const hasDeviceBar = s.targets.length > 1;
+  const h = frameHeight(s.rows, hasDeviceBar);
+  const vis = filterEntries(s.buffers[s.tab], s.filter);
+
+  const maxStart = Math.max(0, vis.length - h);
+  const start = s.follow ? maxStart : Math.min(Math.max(0, s.scroll), maxStart);
+  const window = vis.slice(start, start + h);
+
+  const tabBar = TABS.map(t => {
+    const label = ` ${t === 'logs' ? 'Logs' : 'Network'} (${s.buffers[t].length}) `;
+    return t === s.tab ? chalk.inverse(label) : chalk.dim(label);
+  }).join(' ');
+
+  const restart = s.clearOnRestart ? 'restart:clear' : 'restart:keep';
+  const head = ` ${s.who || '…'} · ${s.status} · ${restart}${s.filter ? ` · filter:"${s.filter}"` : ''}    ${tabBar}`;
+  const foot =
+    s.mode === 'normal'
+      ? ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  /search  f filter  n/N next  c clear  k restart  r reconnect  ↑↓ scroll  q quit`
+      : `${s.mode}: ${s.input}${chalk.inverse(' ')}`;
+
+  let out = '\x1b[H\x1b[2J';
+  out += chalk.inverse(pad(head, s.cols)) + '\n';
+  if (hasDeviceBar) {
+    const bar =
+      ' Devices: ' +
+      s.targets
+        .map((t, i) => {
+          const label = ` ${i + 1}:${t.label} `;
+          return t.key === s.who ? chalk.inverse(label) : chalk.dim(label);
+        })
+        .join('');
+    out += pad(bar, s.cols) + '\n';
+  }
+
+  if (s.tab === 'network' && s.networkSupported === false) {
+    out += chalk.yellow(' Network isn’t exposed over CDP by this React Native version.');
+    for (let i = 1; i < h; i++) out += '\n';
+  } else {
+    for (let i = 0; i < h; i++) {
+      const e = window[i];
+      out += (e ? levelColor(e)(highlight(e.text.slice(0, s.cols), s.search)) : '') + (i < h - 1 ? '\n' : '');
+    }
+  }
+  out += '\n' + chalk.dim(pad(foot, s.cols));
+  return out;
+}
+
+// ── TUI runtime ─────────────────────────────────────────────────────────────
 
 export function runRnTui(port: number, nameFilter?: string): void {
   const buffers: Record<Tab, LogEntry[]> = { logs: [], network: [] };
@@ -104,80 +175,31 @@ export function runRnTui(port: number, nameFilter?: string): void {
     render();
   });
 
-  function hasDeviceBar(): boolean {
-    return targets.length > 1;
-  }
-
-  function contentHeight(): number {
-    return Math.max(1, (process.stdout.rows ?? 24) - 2 - (hasDeviceBar() ? 1 : 0));
-  }
-
-  function deviceBar(): string {
-    return (
-      ' Devices: ' +
-      targets
-        .map((t, i) => {
-          const label = ` ${i + 1}:${t.label} `;
-          return t.key === who ? chalk.inverse(label) : chalk.dim(label);
-        })
-        .join('')
-    );
-  }
-
-  function visible(): LogEntry[] {
-    return filterEntries(buffers[tab], filter);
-  }
-
-  function matchIndices(vis: LogEntry[]): number[] {
-    if (!search) return [];
-    const t = search.toLowerCase();
-    const out: number[] = [];
-    vis.forEach((e, i) => {
-      if (e.text.toLowerCase().includes(t)) out.push(i);
-    });
-    return out;
-  }
-
-  function tabBar(): string {
-    return TABS.map(t => {
-      const label = ` ${t === 'logs' ? 'Logs' : 'Network'} (${buffers[t].length}) `;
-      return t === tab ? chalk.inverse(label) : chalk.dim(label);
-    }).join(' ');
+  function height(): number {
+    return frameHeight(process.stdout.rows ?? 24, targets.length > 1);
   }
 
   function render(): void {
-    const cols = process.stdout.columns ?? 80;
-    const h = contentHeight();
     const v = view[tab];
-    const vis = visible();
-
-    const maxStart = Math.max(0, vis.length - h);
-    const start = v.follow ? maxStart : Math.min(Math.max(0, v.scroll), maxStart);
-    const window = vis.slice(start, start + h);
-
-    const restart = clearOnRestart ? 'restart:clear' : 'restart:keep';
-    const head = ` ${who || '…'} · ${status} · ${restart}${filter ? ` · filter:"${filter}"` : ''}    ${tabBar()}`;
-    const foot =
-      mode === 'normal'
-        ? ` [ ] tabs${hasDeviceBar() ? '  1-9 device' : ''}  /search  f filter  n/N next  c clear  k restart  r reconnect  ↑↓ scroll  q quit`
-        : `${mode}: ${input}${chalk.inverse(' ')}`;
-
-    let out = '\x1b[H\x1b[2J';
-    out += chalk.inverse(pad(head, cols)) + '\n';
-    if (hasDeviceBar()) out += pad(deviceBar(), cols) + '\n';
-
-    if (tab === 'network' && networkSupported === false) {
-      out += chalk.yellow(' Network isn’t exposed over CDP by this React Native version.');
-      for (let i = 1; i < h; i++) out += '\n';
-    } else {
-      for (let i = 0; i < h; i++) {
-        const e = window[i];
-        const line = e ? levelColor(e)(highlight(e.text.slice(0, cols), search)) : '';
-        out += line + (i < h - 1 ? '\n' : '');
-      }
-    }
-    out += '\n' + chalk.dim(pad(foot, cols));
-    process.stdout.write(out);
+    process.stdout.write(
+      renderFrame({
+        cols: process.stdout.columns ?? 80,
+        rows: process.stdout.rows ?? 24,
+        tab,
+        buffers,
+        scroll: v.scroll,
+        follow: v.follow,
+        filter,
+        search,
+        mode,
+        input,
+        clearOnRestart,
+        status,
+        who,
+        networkSupported,
+        targets,
+      }),
+    );
   }
 
   function quit(): void {
@@ -188,17 +210,17 @@ export function runRnTui(port: number, nameFilter?: string): void {
   }
 
   function switchTab(dir: 1 | -1): void {
-    const idx = TABS.indexOf(tab);
-    tab = TABS[(idx + dir + TABS.length) % TABS.length];
+    tab = TABS[(TABS.indexOf(tab) + dir + TABS.length) % TABS.length];
   }
 
   function jump(dir: 1 | -1): void {
-    const vis = visible();
-    const hits = matchIndices(vis);
+    const vis = filterEntries(buffers[tab], filter);
+    if (!search) return;
+    const t = search.toLowerCase();
+    const hits = vis.flatMap((e, i) => (e.text.toLowerCase().includes(t) ? [i] : []));
     if (!hits.length) return;
-    const h = contentHeight();
     const v = view[tab];
-    const current = v.follow ? Math.max(0, vis.length - h) : v.scroll;
+    const current = v.follow ? Math.max(0, vis.length - height()) : v.scroll;
     let next = dir === 1 ? hits.find(i => i > current) : [...hits].reverse().find(i => i < current);
     if (next === undefined) next = dir === 1 ? hits[0] : hits[hits.length - 1];
     v.follow = false;
@@ -226,7 +248,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
       return;
     }
 
-    const h = contentHeight();
+    const h = height();
     const v = view[tab];
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
     else if (str === '[') switchTab(-1);
@@ -254,19 +276,15 @@ export function runRnTui(port: number, nameFilter?: string): void {
     else if (key.name === 'up') {
       v.follow = false;
       v.scroll = Math.max(0, v.scroll - 1);
-    } else if (key.name === 'down') {
-      v.scroll += 1;
-    } else if (key.name === 'pageup') {
+    } else if (key.name === 'down') v.scroll += 1;
+    else if (key.name === 'pageup') {
       v.follow = false;
       v.scroll = Math.max(0, v.scroll - h);
-    } else if (key.name === 'pagedown') {
-      v.scroll += h;
-    } else if (str === 'g') {
+    } else if (key.name === 'pagedown') v.scroll += h;
+    else if (str === 'g') {
       v.follow = false;
       v.scroll = 0;
-    } else if (str === 'G') {
-      v.follow = true;
-    }
+    } else if (str === 'G') v.follow = true;
     render();
   }
 
