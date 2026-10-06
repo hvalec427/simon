@@ -32,28 +32,28 @@ program
   .action(createCommand);
 
 program
-  .command('delete')
-  .description('Delete a simulator or emulator (picks from a list if no flag given)')
+  .command('delete [name]')
+  .description('Delete a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(deleteCommand);
 
 program
-  .command('launch')
-  .description('Launch a simulator or emulator (picks from a list if no flag given)')
+  .command('launch [name]')
+  .description('Launch a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(launchCommand);
 
 program
-  .command('stop')
-  .description('Stop a running simulator or emulator (picks from a list if no flag given)')
+  .command('stop [name]')
+  .description('Stop a running simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(stopCommand);
 
 program
-  .command('open-link <url>')
+  .command('open-link <url> [name]')
   .description('Open a deep link on a running simulator, emulator, or physical device')
   .option('-i, --ios [name]', 'Open on iOS simulator or device')
   .option('-a, --android [name]', 'Open on Android emulator or device')
@@ -62,7 +62,7 @@ program
   .action(openLinkCommand);
 
 program
-  .command('logs')
+  .command('logs [name]')
   .description('Stream logs from a running simulator, emulator, or physical device')
   .option('-i, --ios [name]', 'Stream logs from iOS simulator or device')
   .option('-a, --android [name]', 'Stream logs from Android emulator or device')
@@ -73,8 +73,8 @@ program
   .action(logsCommand);
 
 program
-  .command('wipe')
-  .description('Wipe all data on a simulator or emulator (picks from a list if no flag given)')
+  .command('wipe [name]')
+  .description('Wipe all data on a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(wipeCommand);
@@ -92,7 +92,7 @@ program
   .action(runningCommand);
 
 program
-  .command('location [coords]')
+  .command('location [coords] [name]')
   .description('Set a simulated GPS location (coords as "lat,lon") on a simulator, emulator, or physical iOS device')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')

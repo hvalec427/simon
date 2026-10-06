@@ -2,18 +2,15 @@ import confirm from '@inquirer/confirm';
 import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { wipeAvd } from '../utils/android.js';
-import { pickInstalledDevice } from '../utils/devices.js';
+import { pickInstalledDevice, resolveFilterName } from '../utils/devices.js';
 
 interface WipeOptions {
   ios?: string | boolean;
   android?: string | boolean;
 }
 
-export async function wipeCommand(options: WipeOptions): Promise<void> {
-  const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-  const name = typeof options.ios === 'string' ? options.ios
-    : typeof options.android === 'string' ? options.android
-    : undefined;
+export async function wipeCommand(target: string | undefined, options: WipeOptions): Promise<void> {
+  const { filter, name } = resolveFilterName(options, target);
 
   // Running devices can't be wiped, so they're hidden from the picker; a device
   // named explicitly is still found (and guarded below) so the error is clear.

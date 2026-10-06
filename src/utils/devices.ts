@@ -3,6 +3,20 @@ import { getRunningAndroidDevicesAsync, listAvds, runningAvdNames } from './andr
 import { getRunningIosDevicesAsync, listSimulators } from './ios.js';
 import { selectWithExit, spinner } from './prompt.js';
 
+// Resolve the picker's filter + target name from the -i/-a flags and an optional
+// positional name. A flag with a value (-i "iPhone 16") sets both; a bare flag
+// (-i) just limits the platform; a positional name targets a device on either
+// platform (no -i/-a needed).
+export function resolveFilterName(
+  options: { ios?: string | boolean; android?: string | boolean },
+  positional?: string,
+): { filter?: 'ios' | 'android'; name?: string } {
+  const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
+  const name =
+    typeof options.ios === 'string' ? options.ios : typeof options.android === 'string' ? options.android : positional;
+  return { filter, name };
+}
+
 export type RunningDevice =
   | { platform: 'ios'; kind: 'simulator'; name: string; udid: string; runtime: string }
   | { platform: 'ios'; kind: 'physical'; name: string; udid: string; osVersion: string }

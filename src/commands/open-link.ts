@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { openUrlOnEmulator, openUrlOnPhysicalAndroid } from '../utils/android.js';
 import { openUrlOnPhysicalIos, openUrlOnSimulator } from '../utils/ios.js';
-import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
+import { RunningDevice, pickRunningDevice, resolveFilterName } from '../utils/devices.js';
 
 interface OpenLinkOptions {
   ios?: string | boolean;
@@ -10,12 +10,9 @@ interface OpenLinkOptions {
   restart?: boolean;
 }
 
-export async function openLinkCommand(url: string, options: OpenLinkOptions): Promise<void> {
+export async function openLinkCommand(url: string, target: string | undefined, options: OpenLinkOptions): Promise<void> {
   try {
-    const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-    const name = typeof options.ios === 'string' ? options.ios
-      : typeof options.android === 'string' ? options.android
-      : undefined;
+    const { filter, name } = resolveFilterName(options, target);
 
     const device = await pickRunningDevice('Select a device to open the link on:', filter, name);
     openOnDevice(device, url, options.bundleId, options.restart);

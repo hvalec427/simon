@@ -3,7 +3,7 @@ import { ChildProcess, execSync, spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
+import { RunningDevice, pickRunningDevice, resolveFilterName } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
 import { streamReactNativeLogs } from '../utils/rnlogs.js';
 import { runRnTui } from './rntui.js';
@@ -44,11 +44,8 @@ function androidPid(adb: string, serial: string, app: string): string | null {
   }
 }
 
-export async function logsCommand(options: LogsOptions): Promise<void> {
-  const platform = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-  const name = typeof options.ios === 'string' ? options.ios
-    : typeof options.android === 'string' ? options.android
-    : undefined;
+export async function logsCommand(target: string | undefined, options: LogsOptions): Promise<void> {
+  const { filter: platform, name } = resolveFilterName(options, target);
 
   try {
     if (options.rn) {

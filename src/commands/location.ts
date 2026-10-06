@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { findBin } from '../utils/android.js';
-import { pickRunningDevice } from '../utils/devices.js';
+import { pickRunningDevice, resolveFilterName } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel, stopTunnel } from '../utils/goios.js';
 import { resetAndroidDeviceLocation, setAndroidDeviceLocation } from '../utils/androidmock.js';
 
@@ -34,11 +34,12 @@ function goIos(args: string): void {
   }
 }
 
-export async function locationCommand(coords: string | undefined, options: LocationOptions): Promise<void> {
-  const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-  const name = typeof options.ios === 'string' ? options.ios
-    : typeof options.android === 'string' ? options.android
-    : undefined;
+export async function locationCommand(
+  coords: string | undefined,
+  target: string | undefined,
+  options: LocationOptions,
+): Promise<void> {
+  const { filter, name } = resolveFilterName(options, target);
 
   let parsed: { lat: string; lon: string } | null = null;
   if (!options.reset) {

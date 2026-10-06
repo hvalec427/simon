@@ -55,15 +55,17 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 
 Every device command picks its target the same way:
 
+- **a single device** → used automatically, no prompt
 - **no flag** → pick from a combined list of all devices
 - **`-i` / `-a`** → limit the list to iOS / Android
 - **a name** → target that device directly
-- **exactly one match** → used automatically, no prompt
+
+A name can be passed on its own — you don't need `-i`/`-a`; simon matches it on either platform. The flag is only for narrowing the picker (or disambiguating if the same name exists on both).
 
 ```sh
 simon launch                 # pick any simulator/emulator from a list
 simon launch -a              # limit the picker to Android
-simon launch -i "iPhone 16"  # launch that specific one, no picker
+simon launch "iPhone 16"     # launch that specific one, no picker, no flag needed
 ```
 
 ### Command-specific flags
