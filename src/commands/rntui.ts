@@ -104,11 +104,12 @@ export function renderFrame(s: FrameState): string {
     return t === s.tab ? `[${label}]` : ` ${label} `;
   }).join(' ');
 
-  const restart = s.clearOnRestart ? 'restart:clear' : 'restart:keep';
-  const head = ` ${s.who || '…'} · ${s.status} · ${restart}${s.filter ? ` · filter:"${s.filter}"` : ''}   ${tabBar}`;
+  const head = ` ${s.who || '…'} · ${s.status}${s.filter ? ` · filter:"${s.filter}"` : ''}   ${tabBar}`;
+  // Describe the current behaviour rather than a cryptic label.
+  const onRestart = `p: ${s.clearOnRestart ? 'clears' : 'keeps'} logs on app restart`;
   const foot =
     s.mode === 'normal'
-      ? ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  / search  f filter${s.search ? '  n/N next' : ''}  c clear  p keep/clear  r reconnect  ↑↓/jk scroll  q quit`
+      ? ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  / search  f filter${s.search ? '  n/N next' : ''}  c clear  ${onRestart}  r reconnect  ↑↓/jk scroll  q quit`
       : `${s.mode}: ${s.input}▏`;
 
   const lines: string[] = [];

@@ -89,7 +89,7 @@ describe('renderFrame', () => {
     expect(f).toContain('Network (0)');
     expect(f).toContain('iPhone');
     expect(f).toContain('connected');
-    expect(f).toContain('restart:keep');
+    expect(f).toContain('keeps logs on app restart');
     expect(f).toContain('hello world');
   });
 
@@ -109,8 +109,8 @@ describe('renderFrame', () => {
     expect(f).toContain('filter:"keep"');
   });
 
-  it('shows restart:clear when toggled', () => {
-    expect(frame({ clearOnRestart: true })).toContain('restart:clear');
+  it('describes clear-on-restart when toggled', () => {
+    expect(frame({ clearOnRestart: true })).toContain('clears logs on app restart');
   });
 
   it('notes when network is unsupported on the network tab', () => {
