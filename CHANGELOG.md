@@ -1,3 +1,10 @@
+# [2.8.0](https://github.com/hvalec427/simon/compare/v2.7.1...v2.8.0) (2026-10-06)
+
+
+### Features
+
+* warm-foreground apps on open-link by default, add --restart for cold launch ([c9a7336](https://github.com/hvalec427/simon/commit/c9a7336873a2c2d901199c97ffe8f390c5cad6dd))
+
 ## [2.7.1](https://github.com/hvalec427/simon/compare/v2.7.0...v2.7.1) (2026-10-05)
 
 
