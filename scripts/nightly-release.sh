@@ -31,7 +31,10 @@ npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
 # ── Release notes: a real changelog of everything since the previous nightly
 # (falling back to the latest stable), grouped like the stable releases, plus a
 # copy-paste install line for this exact build. Nightlies only.
-PREV=$(git tag -l 'v*-nightly.*' --sort=-creatordate | head -1)
+# Previous nightly = the one with the highest timestamp suffix (monotonic, set
+# by date -u at build time). Don't use --sort=creatordate: lightweight tags tie
+# on date and fall back to ascending refname, picking the oldest nightly.
+PREV=$(git tag -l 'v*-nightly.*' | sort -t. -k4,4 -n | tail -1)
 [ -z "${PREV}" ] && PREV="v${LATEST}"
 RANGE="${PREV}..HEAD"
 echo "Changelog range: ${RANGE}"
