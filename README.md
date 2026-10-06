@@ -18,20 +18,6 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh |
 
 Or download the binary directly from the [latest release](https://github.com/hvalec427/simon/releases/latest).
 
-### Release channels
-
-- **stable** (default) — tagged releases from `master`.
-- **nightly** — prereleases built from `develop` on every push (latest features, less baked).
-
-Switch per machine with `simon update`; the choice is remembered, so afterwards plain `simon update` stays on it:
-
-```sh
-simon update --nightly     # switch to nightly and update
-simon update --stable      # back to stable
-simon update               # update on whichever channel you're on
-simon check-update --nightly   # peek at the latest nightly without installing
-```
-
 To jump straight onto nightly from a fresh install (or a build too old to have `--nightly`):
 
 ```sh
