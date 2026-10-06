@@ -30,6 +30,12 @@ simon update               # update on whichever channel you're on
 simon check-update --nightly   # peek at the latest nightly without installing
 ```
 
+To jump straight onto nightly from a fresh install (or a build too old to have `--nightly`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh -s nightly
+```
+
 ## Uninstall
 
 ```sh

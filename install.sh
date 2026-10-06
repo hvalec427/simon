@@ -11,8 +11,11 @@ else
   FILE="simon-darwin-x64"
 fi
 
-# Use pinned version if provided, otherwise fetch latest
-if [ -n "$1" ]; then
+# `nightly` → newest prerelease; a version string → that exact tag; else latest stable.
+if [ "$1" = "nightly" ]; then
+  VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" \
+    | grep '"tag_name"' | grep nightly | head -1 | cut -d'"' -f4)
+elif [ -n "$1" ]; then
   VERSION="$1"
 else
   VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" \
@@ -20,7 +23,7 @@ else
 fi
 
 if [ -z "$VERSION" ]; then
-  echo "Error: could not fetch latest release from $REPO"
+  echo "Error: could not resolve a release from $REPO"
   exit 1
 fi
 
