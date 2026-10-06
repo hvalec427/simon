@@ -5,7 +5,9 @@ import {
   currentVersion,
   downloadBinary,
   installBinary,
+  installTarget,
   latestForChannel,
+  needsSudo,
   loadChannel,
   saveChannel,
 } from '../utils/update.js';
@@ -61,9 +63,11 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(chalk.gray('Installing to /usr/local/bin (may prompt for your password)...'));
+  const target = installTarget();
+  const sudoNote = needsSudo(target) ? ' (needs sudo — may prompt for your password)' : '';
+  console.log(chalk.gray(`Installing to ${target}${sudoNote}...`));
   try {
-    installBinary(tmp);
+    installBinary(tmp, target);
   } catch (err) {
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);

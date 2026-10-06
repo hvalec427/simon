@@ -1,10 +1,10 @@
 import { execSync } from 'child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
 const REPO = 'hvalec427/simon';
-const INSTALL_PATH = '/usr/local/bin/simon';
+const DEFAULT_INSTALL_PATH = '/usr/local/bin/simon';
 
 export type Channel = 'stable' | 'nightly';
 
@@ -91,6 +91,39 @@ export async function downloadBinary(tag: string): Promise<string> {
   return tmp;
 }
 
-export function installBinary(tmpPath: string): void {
-  execSync(`sudo mv "${tmpPath}" "${INSTALL_PATH}"`, { stdio: 'inherit' });
+// Where to install over: the actually-running binary (resolving symlinks), so
+// `simon update` replaces the copy you're invoking — not a hardcoded path.
+export function installTarget(): string {
+  const exec = process.execPath;
+  if (path.basename(exec) === 'simon') {
+    try {
+      return realpathSync(exec);
+    } catch {
+      return exec;
+    }
+  }
+  // Running under node (dev) — fall back to whatever `simon` is on PATH.
+  try {
+    const onPath = execSync('command -v simon', { encoding: 'utf8' }).trim();
+    if (onPath) return realpathSync(onPath);
+  } catch {
+    /* none on PATH */
+  }
+  return DEFAULT_INSTALL_PATH;
+}
+
+// Only use sudo when the target directory isn't writable by the current user.
+export function needsSudo(target: string): boolean {
+  const dir = path.dirname(target);
+  try {
+    accessSync(dir, constants.W_OK);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+export function installBinary(tmpPath: string, target = installTarget()): void {
+  const cmd = needsSudo(target) ? 'sudo mv' : 'mv';
+  execSync(`${cmd} "${tmpPath}" "${target}"`, { stdio: 'inherit' });
 }
