@@ -36,22 +36,29 @@ export function frameHeight(rows: number, deviceBar: boolean): number {
   return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
 }
 
+// The TUI paints its own theme so it's legible on any terminal background
+// (light/beige themes otherwise make dim/gray text unreadable).
+const PANEL_BG = '#1e1e2e';
+const BAR_BG = '#3b4252';
+const panel = (s: string) => chalk.bgHex(PANEL_BG)(s);
+const bar = (s: string) => chalk.bgHex(BAR_BG).whiteBright(s);
+
 function levelColor(e: LogEntry): (s: string) => string {
-  if (e.kind === 'network') return e.level === 'error' ? chalk.red : chalk.gray;
+  if (e.kind === 'network') return e.level === 'error' ? chalk.redBright : chalk.cyanBright;
   switch (e.level) {
     case 'error':
     case 'assert':
-      return chalk.red;
+      return chalk.redBright;
     case 'warning':
     case 'warn':
-      return chalk.yellow;
+      return chalk.yellowBright;
     case 'info':
-      return chalk.cyan;
+      return chalk.cyanBright;
     case 'debug':
     case 'verbose':
       return chalk.gray;
     default:
-      return (s: string) => s;
+      return chalk.whiteBright; // readable on the dark panel background
   }
 }
 
@@ -78,7 +85,11 @@ export interface FrameState {
 }
 
 // Build the full screen frame as a string (pure → snapshot-testable).
+// Every line is padded to full width and given an explicit background so the
+// terminal's own theme never shows through, and the total is always exactly
+// `rows` lines so the header can't scroll off.
 export function renderFrame(s: FrameState): string {
+  const cols = s.cols;
   const hasDeviceBar = s.targets.length > 1;
   const h = frameHeight(s.rows, hasDeviceBar);
   const vis = filterEntries(s.buffers[s.tab], s.filter);
@@ -87,43 +98,45 @@ export function renderFrame(s: FrameState): string {
   const start = s.follow ? maxStart : Math.min(Math.max(0, s.scroll), maxStart);
   const window = vis.slice(start, start + h);
 
+  // Plain text (brackets mark the active item) so widths are correct before color.
   const tabBar = TABS.map(t => {
-    const label = ` ${t === 'logs' ? 'Logs' : 'Network'} (${s.buffers[t].length}) `;
-    return t === s.tab ? chalk.inverse(label) : chalk.dim(label);
+    const label = `${t === 'logs' ? 'Logs' : 'Network'} (${s.buffers[t].length})`;
+    return t === s.tab ? `[${label}]` : ` ${label} `;
   }).join(' ');
 
   const restart = s.clearOnRestart ? 'restart:clear' : 'restart:keep';
-  const head = ` ${s.who || '…'} · ${s.status} · ${restart}${s.filter ? ` · filter:"${s.filter}"` : ''}    ${tabBar}`;
+  const head = ` ${s.who || '…'} · ${s.status} · ${restart}${s.filter ? ` · filter:"${s.filter}"` : ''}   ${tabBar}`;
   const foot =
     s.mode === 'normal'
-      ? ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  /search  f filter  n/N next  c clear  k restart  r reconnect  ↑↓ scroll  q quit`
-      : `${s.mode}: ${s.input}${chalk.inverse(' ')}`;
+      ? ` [ ] tabs${hasDeviceBar ? '  1-9 device' : ''}  / search  f filter${s.search ? '  n/N next' : ''}  c clear  p keep/clear  r reconnect  ↑↓/jk scroll  q quit`
+      : `${s.mode}: ${s.input}▏`;
 
-  let out = '\x1b[H\x1b[2J';
-  out += chalk.inverse(pad(head, s.cols)) + '\n';
+  const lines: string[] = [];
+  lines.push(bar(pad(head, cols)));
   if (hasDeviceBar) {
-    const bar =
+    const db =
       ' Devices: ' +
-      s.targets
-        .map((t, i) => {
-          const label = ` ${i + 1}:${t.label} `;
-          return t.key === s.who ? chalk.inverse(label) : chalk.dim(label);
-        })
-        .join('');
-    out += pad(bar, s.cols) + '\n';
+      s.targets.map((t, i) => (t.key === s.who ? `[${i + 1}:${t.label}]` : ` ${i + 1}:${t.label} `)).join(' ');
+    lines.push(bar(pad(db, cols)));
   }
 
   if (s.tab === 'network' && s.networkSupported === false) {
-    out += chalk.yellow(' Network isn’t exposed over CDP by this React Native version.');
-    for (let i = 1; i < h; i++) out += '\n';
+    lines.push(panel(chalk.yellowBright(pad(' Network isn’t exposed over CDP by this React Native version.', cols))));
+    for (let i = 1; i < h; i++) lines.push(panel(pad('', cols)));
   } else {
     for (let i = 0; i < h; i++) {
       const e = window[i];
-      out += (e ? levelColor(e)(highlight(e.text.slice(0, s.cols), s.search)) : '') + (i < h - 1 ? '\n' : '');
+      if (!e) {
+        lines.push(panel(pad('', cols)));
+        continue;
+      }
+      const text = pad(e.text.slice(0, cols), cols); // width set on raw text (no ANSI)
+      lines.push(panel(levelColor(e)(highlight(text, s.search))));
     }
   }
-  out += '\n' + chalk.dim(pad(foot, s.cols));
-  return out;
+  lines.push(bar(pad(foot, cols)));
+
+  return '\x1b[H\x1b[2J' + lines.join('\n');
 }
 
 // ── TUI runtime ─────────────────────────────────────────────────────────────
@@ -205,7 +218,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   function quit(): void {
     client.stop();
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.stdout.write('\x1b[?25h\x1b[?1049l');
+    process.stdout.write('\x1b[?7h\x1b[?25h\x1b[?1049l'); // restore wrap, cursor, main screen
     process.exit(0);
   }
 
@@ -262,7 +275,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === 'c') {
       buffers.logs.length = 0;
       buffers.network.length = 0;
-    } else if (str === 'k') clearOnRestart = !clearOnRestart;
+    } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str && /^[1-9]$/.test(str)) {
       const idx = Number(str) - 1;
       if (idx < targets.length) {
@@ -273,10 +286,10 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === 'r') client.reconnectNow();
     else if (str === 'n') jump(1);
     else if (str === 'N') jump(-1);
-    else if (key.name === 'up') {
+    else if (key.name === 'up' || str === 'k') {
       v.follow = false;
       v.scroll = Math.max(0, v.scroll - 1);
-    } else if (key.name === 'down') v.scroll += 1;
+    } else if (key.name === 'down' || str === 'j') v.scroll += 1;
     else if (key.name === 'pageup') {
       v.follow = false;
       v.scroll = Math.max(0, v.scroll - h);
@@ -288,7 +301,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
     render();
   }
 
-  process.stdout.write('\x1b[?1049h\x1b[?25l');
+  // Alt screen, hide cursor, disable line-wrap (long lines must not wrap and
+  // push the fixed header off-screen).
+  process.stdout.write('\x1b[?1049h\x1b[?25l\x1b[?7l');
   readline.emitKeypressEvents(process.stdin);
   if (process.stdin.isTTY) process.stdin.setRawMode(true);
   process.stdin.on('keypress', onKey);
