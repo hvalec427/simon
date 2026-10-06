@@ -1,3 +1,10 @@
+## [2.7.1](https://github.com/hvalec427/simon/compare/v2.7.0...v2.7.1) (2026-10-05)
+
+
+### Bug Fixes
+
+* surface devicectl errors when opening a link on a physical device ([2d1ca8d](https://github.com/hvalec427/simon/commit/2d1ca8d661b9f3f66092079227b2b4ffab4b3ca6))
+
 # [2.7.0](https://github.com/hvalec427/simon/compare/v2.6.1...v2.7.0) (2026-10-05)
 
 
