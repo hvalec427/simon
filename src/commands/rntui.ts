@@ -124,6 +124,10 @@ export function frameHeight(rows: number, deviceBar: boolean): number {
   return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
 }
 
+// Explicit search-match style so it reads the same on the colored list and on
+// the plain detail view (chalk.inverse looked gray on uncoloured detail text).
+const hlMatch = chalk.bgCyanBright.black;
+
 export function highlight(text: string, term: string): string {
   if (!term) return text;
   const lower = text.toLowerCase();
@@ -136,7 +140,7 @@ export function highlight(text: string, term: string): string {
       out += text.slice(i);
       break;
     }
-    out += text.slice(i, hit) + chalk.inverse(text.slice(hit, hit + term.length));
+    out += text.slice(i, hit) + hlMatch(text.slice(hit, hit + term.length));
     i = hit + term.length;
   }
   return out;
@@ -493,7 +497,13 @@ export function runRnTui(port: number, nameFilter?: string): void {
       const h = height();
       const max = Math.max(0, detailLinesNow().length - h);
       if (key.name === 'return' || key.name === 'escape') closeDetail();
-      else if (str === '/') {
+      else if (str && /^[1-9]$/.test(str)) {
+        const idx = Number(str) - 1;
+        if (idx < targets.length) {
+          activeKey = targets[idx].key; // switch device; the preview belonged to the old one
+          closeDetail();
+        }
+      } else if (str === '/') {
         mode = 'search';
         input = search;
       } else if (str === 'n') jumpDetail(1);
