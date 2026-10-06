@@ -57,6 +57,7 @@ program
   .option('-i, --ios [name]', 'Open on iOS simulator or device')
   .option('-a, --android [name]', 'Open on Android emulator or device')
   .option('-b, --bundle-id <id>', 'Deliver directly to this app instead of routing via Safari (physical iOS only)')
+  .option('-r, --restart', 'Cold-relaunch the app instead of warm-foregrounding it (physical iOS only)')
   .action(openLinkCommand);
 
 program

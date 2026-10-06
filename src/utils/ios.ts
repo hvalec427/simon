@@ -142,12 +142,15 @@ function ensureDevicectl(): void {
 // "tap a link in a website" behaviour we hand the URL to Safari and let the
 // system route the scheme to the owning app. Passing an explicit bundleId
 // delivers the URL straight to that app instead (skips Safari's confirmation).
-export function openUrlOnPhysicalIos(udid: string, url: string, bundleId?: string): void {
+// By default we warm-deliver (foreground the running app, keeping its state);
+// `restart` cold-relaunches it via --terminate-existing.
+export function openUrlOnPhysicalIos(udid: string, url: string, bundleId?: string, restart = false): void {
   ensureDevicectl();
   const target = bundleId ?? 'com.apple.mobilesafari';
+  const terminate = restart ? '--terminate-existing ' : '';
   try {
     execSync(
-      `xcrun devicectl device process launch --terminate-existing ` +
+      `xcrun devicectl device process launch ${terminate}` +
         `--payload-url "${url}" --device "${udid}" "${target}"`,
       { stdio: ['ignore', 'ignore', 'pipe'] },
     );
