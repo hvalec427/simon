@@ -62,7 +62,7 @@ simon launch -i "iPhone 16"  # launch that specific one, no picker
 - `location <lat,lon>` — pass coordinates as one argument, e.g. `simon location 51.5074,-0.1278`; `--reset` clears it. Works on simulators and emulators natively. **Physical iOS** (experimental) via [go-ios](https://github.com/danielpaulus/go-ios) — simon installs it automatically if missing and starts the iOS 17+ developer tunnel for you (prompts for `sudo` once); manage it with `simon tunnel start|stop|status`. **Physical Android** works via a tiny helper app simon installs and drives over adb (needs Developer Options enabled on the device).
 - `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
 - `logs --app <name>` — show only one app's logs (process/app name; bundle id also matches on iOS simulators). Physical iOS streams the device syslog via [go-ios](https://github.com/danielpaulus/go-ios) (same auto-install/tunnel as `location`). This is the **native** log — for React Native JS logs use `--rn` below.
-- `logs --rn [--port 8081]` — stream React Native **JS console + network** from Metro's inspector (CDP) — the same feed React Native DevTools uses, instead of device logs. Works for any device/simulator connected to Metro (no go-ios/adb needed). If several are connected you get a picker (narrow it with `-i`/`-a` + a name). Dev-only (Metro must be running); network events depend on your RN version's CDP support.
+- `logs --rn [--port 8081]` — stream React Native **JS console + network** from Metro's inspector (CDP) — the same feed React Native DevTools uses, instead of device logs. Works for any device/simulator connected to Metro (no go-ios/adb needed). If several are connected you get a picker (narrow it with `-i`/`-a` + a name). Dev-only (Metro must be running); network events depend on your RN version's CDP support. simon sends the `http://localhost:<port>` Origin the inspector requires — if Metro logs `Connection from DevTools failed … origin 'undefined'`, update simon.
 - `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
 - `open-link <url> -r` — cold-relaunch the app instead of warm-foregrounding it (physical iOS; default keeps the app's current state so you can test deep-link navigation from a background state)
 - `push -t [--fcm]` — print a payload template (`--fcm` for the FCM shape, otherwise the `aps` shape)
@@ -156,7 +156,7 @@ The FCM payload is an FCM v1 message body (simon injects the token):
 }
 ```
 
-> No external dependencies — FCM auth (service-account JWT → OAuth) and APNs (`.p8` JWT over HTTP/2) use Node built-ins. simon never stores your credentials; it only reads the files your config points to.
+> simon never stores your credentials — it only reads the files your config points to.
 
 ## Requirements
 

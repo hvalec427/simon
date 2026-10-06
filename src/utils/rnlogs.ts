@@ -1,4 +1,5 @@
 import chalk from 'chalk';
+import WebSocket from 'ws';
 import { selectWithExit } from './prompt.js';
 
 interface RnTarget {
@@ -81,10 +82,6 @@ function handleCdp(msg: { method?: string; params?: any }): void {
 }
 
 export async function streamReactNativeLogs(port: number, nameFilter?: string): Promise<void> {
-  if (typeof WebSocket === 'undefined') {
-    throw new Error('This build of Node has no WebSocket support — update simon (or Node ≥ 22.4).');
-  }
-
   const base = `http://localhost:${port}`;
   let targets: RnTarget[];
   try {
@@ -120,11 +117,13 @@ export async function streamReactNativeLogs(port: number, nameFilter?: string): 
           debuggable.map(t => ({ name: targetLabel(t), value: t })),
         );
 
-  const ws = new WebSocket(target.webSocketDebuggerUrl!);
+  // Metro's inspector proxy requires a localhost Origin header on the upgrade
+  // request — the `ws` client lets us set it (the global WebSocket can't).
+  const ws = new WebSocket(target.webSocketDebuggerUrl!, { origin: base });
   let id = 1;
   const send = (method: string, params?: object) => ws.send(JSON.stringify({ id: id++, method, params }));
 
-  ws.addEventListener('open', () => {
+  ws.on('open', () => {
     send('Runtime.enable');
     send('Log.enable');
     send('Network.enable');
@@ -134,19 +133,19 @@ export async function streamReactNativeLogs(port: number, nameFilter?: string): 
     );
   });
 
-  ws.addEventListener('message', ev => {
+  ws.on('message', data => {
     try {
-      handleCdp(JSON.parse(String((ev as MessageEvent).data)));
+      handleCdp(JSON.parse(data.toString()));
     } catch {
       /* ignore non-JSON frames */
     }
   });
 
-  ws.addEventListener('error', () => {
-    console.error(chalk.red('Lost connection to Metro.'));
+  ws.on('error', err => {
+    console.error(chalk.red(`Lost connection to Metro: ${err.message}`));
     process.exit(1);
   });
-  ws.addEventListener('close', () => process.exit(0));
+  ws.on('close', () => process.exit(0));
 
   process.once('SIGINT', () => {
     try {

@@ -23,7 +23,8 @@
     "@inquirer/input": "^5.1.2",
     "@inquirer/select": "^4.0.2",
     "chalk": "^5.4.1",
-    "commander": "^13.1.0"
+    "commander": "^13.1.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
@@ -32,6 +33,7 @@
     "@semantic-release/exec": "^7.1.0",
     "@semantic-release/git": "^10.0.1",
     "@types/node": "^22.15.29",
+    "@types/ws": "^8.18.2",
     "@yao-pkg/pkg": "^6.20.0",
     "esbuild": "^0.28.1",
     "husky": "^9.1.7",
