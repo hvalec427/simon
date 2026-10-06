@@ -14,8 +14,16 @@ function pbcopy(text: string): boolean {
 
 const MAX_LINES = 5000;
 const MAX_NET = 1000;
-const TABS = ['logs', 'network'] as const;
+const PERF_HISTORY = 60;
+const TABS = ['logs', 'network', 'perf'] as const;
 type Tab = (typeof TABS)[number];
+
+export interface PerfState {
+  fps: number | null;
+  heapUsed: number | null;
+  heapTotal: number | null;
+  history: number[];
+}
 
 // ── pure helpers (unit-tested) ──────────────────────────────────────────────
 
@@ -152,6 +160,44 @@ export function detailViewLines(s: FrameState, item: LogEntry | NetRecord, cols:
   return raw.flatMap(l => wrap(oneLine(l), cols));
 }
 
+const SPARK = '▁▂▃▄▅▆▇█';
+
+function fpsColor(fps: number): (s: string) => string {
+  return fps >= 50 ? chalk.greenBright : fps >= 30 ? chalk.yellowBright : chalk.redBright;
+}
+
+function mb(bytes: number): string {
+  return `${(bytes / 1048576).toFixed(1)} MB`;
+}
+
+function sparkline(values: number[], max = 60): string {
+  return values.map(v => SPARK[Math.min(SPARK.length - 1, Math.max(0, Math.round((v / max) * (SPARK.length - 1))))]).join('');
+}
+
+// The Performance tab body: JS-thread FPS + a history sparkline + JS heap usage.
+export function perfLines(perf: PerfState | null | undefined, cols: number, h: number): string[] {
+  const out: string[] = ['', '  JS thread'];
+  const fps = perf?.fps ?? null;
+  if (fps == null) {
+    out.push('    FPS  ' + chalk.gray('— (measuring…)'));
+  } else {
+    const width = Math.min(30, Math.max(10, cols - 20));
+    const filled = Math.round((Math.min(fps, 60) / 60) * width);
+    const barStr = '█'.repeat(filled) + '░'.repeat(width - filled);
+    out.push(`    FPS  ${fpsColor(fps)(String(fps).padStart(2))} / 60   ${fpsColor(fps)(barStr)}`);
+  }
+  if (perf?.history.length) out.push(`    last ${perf.history.length}s  ${sparkline(perf.history)}`);
+  out.push('', '  Memory (JS heap)');
+  out.push(
+    perf?.heapUsed == null
+      ? '    ' + chalk.gray('not reported by this runtime')
+      : `    used ${mb(perf.heapUsed)}${perf.heapTotal ? chalk.gray(` / ${mb(perf.heapTotal)}`) : ''}`,
+  );
+  out.push('', chalk.gray('  JS-thread FPS = how fast JS services frames (≤60). Native/UI FPS isn’t exposed over CDP.'));
+  while (out.length < h) out.push('');
+  return out.slice(0, h);
+}
+
 export function frameHeight(rows: number, deviceBar: boolean): number {
   return Math.max(1, rows - 2 - (deviceBar ? 1 : 0));
 }
@@ -237,7 +283,7 @@ export interface FrameState {
   cols: number;
   rows: number;
   tab: Tab;
-  buffers: Record<Tab, LogEntry[]>;
+  buffers: { logs: LogEntry[]; network: LogEntry[] };
   netRecords: NetRecord[];
   sel: number;
   follow: boolean;
@@ -259,6 +305,7 @@ export interface FrameState {
   errorsOnly: boolean;
   method: string; // 'ALL' | 'GET' | 'POST' | ...
   flash?: string; // transient one-shot status (e.g. "copied")
+  perf?: PerfState | null; // Performance tab data for the active device
 }
 
 export function renderFrame(s: FrameState): string {
@@ -268,8 +315,8 @@ export function renderFrame(s: FrameState): string {
   const isLogs = s.tab === 'logs';
 
   const tabBar = TABS.map(t => {
-    const count = t === 'logs' ? s.buffers.logs.length : s.netRecords.length;
-    const label = `${t === 'logs' ? 'Logs' : 'Network'} (${count})`;
+    const label =
+      t === 'logs' ? `Logs (${s.buffers.logs.length})` : t === 'network' ? `Network (${s.netRecords.length})` : 'Perf';
     return t === s.tab ? `[${label}]` : ` ${label} `;
   }).join(' ');
 
@@ -283,6 +330,8 @@ export function renderFrame(s: FrameState): string {
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
   else if (s.flash) foot = ` ${s.flash}`;
+  else if (s.tab === 'perf')
+    foot = ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · live JS-thread FPS + heap · R reload · r reconnect · q quit`;
   else if (s.detail && s.maximized)
     foot =
       ` ⏎/esc close · z split · jk/JK scroll · g/G · / search${s.search ? ' · n/N' : ''}` +
@@ -335,7 +384,9 @@ export function renderFrame(s: FrameState): string {
     return paint(txt, s.search, x => x, absIdx === s.detailHit ? hlCurrent : hlOther);
   };
 
-  if (s.tab === 'network' && s.networkSupported === false && s.netRecords.length === 0) {
+  if (s.tab === 'perf') {
+    for (const l of perfLines(s.perf, cols, h)) body.push(l);
+  } else if (s.tab === 'network' && s.networkSupported === false && s.netRecords.length === 0) {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
   } else if (s.detail && s.maximized && len > 0) {
@@ -380,12 +431,13 @@ interface Device {
   status: Status;
   networkSupported?: boolean;
   wasDisconnected: boolean;
+  perf?: PerfState;
 }
 
 export function runRnTui(port: number, nameFilter?: string): void {
   const devices = new Map<string, Device>();
   let activeKey: string | undefined;
-  const sel: Record<Tab, number> = { logs: 0, network: 0 };
+  const sel: Record<Tab, number> = { logs: 0, network: 0, perf: 0 };
   let follow = true;
   let detail = false;
   let maximized = false;
@@ -471,8 +523,12 @@ export function runRnTui(port: number, nameFilter?: string): void {
   });
 
   const height = () => frameHeight(process.stdout.rows ?? 24, targets.length > 1);
-  const items = () =>
-    tab === 'logs' ? filterEntries(active().logs, filter) : netView(active().net, filter, errorsOnly, method);
+  const items = (): (LogEntry | NetRecord)[] =>
+    tab === 'logs'
+      ? filterEntries(active().logs, filter)
+      : tab === 'network'
+      ? netView(active().net, filter, errorsOnly, method)
+      : [];
   const count = () => items().length;
 
   function render(): void {
@@ -504,11 +560,37 @@ export function runRnTui(port: number, nameFilter?: string): void {
         errorsOnly,
         method,
         flash,
+        perf: d.perf,
       }),
     );
   }
 
+  // Poll performance for the active device while the Perf tab is visible.
+  let sampling = false;
+  async function sampleNow(): Promise<void> {
+    if (sampling || tab !== 'perf' || !activeKey) return;
+    sampling = true;
+    try {
+      const s = await client.perfSample(activeKey);
+      if (s) {
+        const d = dev(activeKey);
+        const history = d.perf?.history ?? [];
+        if (s.fps != null) {
+          history.push(s.fps);
+          while (history.length > PERF_HISTORY) history.shift();
+        }
+        d.perf = { fps: s.fps, heapUsed: s.heapUsed, heapTotal: s.heapTotal, history };
+        if (tab === 'perf') render();
+      }
+    } finally {
+      sampling = false;
+    }
+  }
+
+  const perfTimer = setInterval(sampleNow, 1000);
+
   function quit(): void {
+    clearInterval(perfTimer);
     client.stop();
     if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.stdout.write('\x1b[?7h\x1b[?25h\x1b[?1049l');
@@ -817,6 +899,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
       refreshDetail();
     }
     render();
+    if (tab === 'perf') void sampleNow(); // sample promptly on entering perf / switching device
   }
 
   process.stdout.write('\x1b[?1049h\x1b[?25l\x1b[?7l');

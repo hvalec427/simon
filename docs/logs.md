@@ -22,7 +22,16 @@ simon logs --rn [--port 8081]
 
 React Native **JS console + network** from Metro's inspector (CDP) — the same feed React Native DevTools uses — for any device/simulator connected to Metro (no go-ios/adb needed). Dev-only (Metro must be running); network depth depends on your RN version's CDP support. Piped or redirected, it falls back to a plain line stream.
 
-In a terminal it opens an **interactive viewer** (dark theme) with **Logs** and **Network** tabs. It has two modes.
+In a terminal it opens an **interactive viewer** (dark theme) with **Logs**, **Network**, and **Perf** tabs. The Logs/Network tabs have two modes (list and preview).
+
+## Perf tab
+
+A live dashboard for the active device, sampled once a second:
+
+- **JS-thread FPS** — how many frames per second the JS thread services (≤60), shown as a number, a bar, and a rolling sparkline of the last 60s. simon measures this by injecting a `requestAnimationFrame` counter into the app over CDP.
+- **JS heap** — used / total, via `Runtime.getHeapUsage` (shown only if the runtime reports it).
+
+> Native/UI FPS is **not** exposed over CDP, so only the JS-thread figure is available here — the same "JS" number RN's in-app perf monitor shows. Switch devices with `1`-`9`.
 
 ### List mode (default, and the side-by-side split)
 

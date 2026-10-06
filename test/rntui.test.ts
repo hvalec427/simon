@@ -175,6 +175,24 @@ describe('renderFrame', () => {
     expect(frame({ tab: 'network', networkSupported: false })).toContain('isn’t exposed');
   });
 
+  it('renders the performance tab with FPS, heap and a sparkline', () => {
+    const f = frame({
+      tab: 'perf',
+      rows: 20,
+      perf: { fps: 58, heapUsed: 42 * 1048576, heapTotal: 60 * 1048576, history: [30, 45, 58] },
+    });
+    expect(f).toContain('[Perf]');
+    expect(f).toContain('JS thread');
+    expect(f).toContain('58');
+    expect(f).toContain('42.0 MB');
+    expect(f).toContain('60.0 MB');
+    expect(f).toMatch(/[▁▂▃▄▅▆▇█]/); // sparkline
+  });
+
+  it('shows a measuring placeholder when perf has no sample yet', () => {
+    expect(frame({ tab: 'perf', perf: null })).toContain('measuring');
+  });
+
   it('shows a device bar and hint when multiple targets exist', () => {
     const f = frame({ targets: [{ key: 'iPhone', label: 'iPhone' }, { key: 'Pixel', label: 'Pixel' }] });
     expect(f).toContain('Devices:');

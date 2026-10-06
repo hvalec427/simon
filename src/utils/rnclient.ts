@@ -13,6 +13,12 @@ export interface TargetInfo {
   label: string;
 }
 
+export interface PerfSample {
+  fps: number | null; // JS-thread frames/sec (null if Runtime.evaluate unsupported)
+  heapUsed: number | null; // bytes
+  heapTotal: number | null; // bytes
+}
+
 export interface NetRecord {
   id: string;
   method: string;
@@ -176,6 +182,38 @@ export class RnClient extends EventEmitter {
     } catch {
       /* ignore */
     }
+  }
+
+  // Sample performance for a device: JS-thread FPS (via an injected
+  // requestAnimationFrame counter) and JS heap usage. Native/UI FPS isn't
+  // available over CDP. Returns null if the device isn't connected.
+  async perfSample(key: string): Promise<PerfSample | null> {
+    const conn = this.conns.get(key);
+    if (!conn?.ws || !conn.connected) return null;
+    // Installs a once-per-second rAF frame counter on first call (idempotent),
+    // then returns the most recent frames-per-second value.
+    const expr =
+      '(function(){var s=globalThis.__simonFps;if(!s){s=globalThis.__simonFps={v:0,c:0,t:Date.now()};' +
+      'var loop=function(){s.c++;var n=Date.now();if(n-s.t>=1000){s.v=Math.round(s.c*1000/(n-s.t));s.c=0;s.t=n;}' +
+      '(globalThis.requestAnimationFrame||function(f){return setTimeout(f,16);})(loop);};loop();}return s.v;})()';
+    let fps: number | null = null;
+    let heapUsed: number | null = null;
+    let heapTotal: number | null = null;
+    try {
+      const r = await this.request(conn, 'Runtime.evaluate', { expression: expr, returnByValue: true });
+      const v = r?.result?.value;
+      fps = typeof v === 'number' ? v : null;
+    } catch {
+      /* evaluate unsupported */
+    }
+    try {
+      const h = await this.request(conn, 'Runtime.getHeapUsage', {});
+      if (typeof h?.usedSize === 'number') heapUsed = h.usedSize;
+      if (typeof h?.totalSize === 'number') heapTotal = h.totalSize;
+    } catch {
+      /* heap usage unsupported by this runtime */
+    }
+    return { fps, heapUsed, heapTotal };
   }
 
   // Lazily expand an object's properties (deep) via Runtime.getProperties —
