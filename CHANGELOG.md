@@ -1,3 +1,10 @@
+# [2.9.0](https://github.com/hvalec427/simon/compare/v2.8.2...v2.9.0) (2026-10-06)
+
+
+### Features
+
+* send push to real devices via FCM and APNs ([5d5fade](https://github.com/hvalec427/simon/commit/5d5fade1308887808436b4bf5c1493f2d6b5d699))
+
 ## [2.8.2](https://github.com/hvalec427/simon/compare/v2.8.1...v2.8.2) (2026-10-06)
 
 
