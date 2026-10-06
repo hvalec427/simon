@@ -18,6 +18,7 @@ import {
 interface UpdateOptions {
   nightly?: boolean;
   stable?: boolean;
+  force?: boolean;
 }
 
 // A channel flag both selects and remembers the channel; otherwise use the saved one.
@@ -55,28 +56,28 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
 
   const cmp = current === 'unknown' ? 1 : compareVersions(latest.version, current);
-  if (cmp === 0) {
+  if (cmp === 0 && !options.force) {
     console.log(chalk.green(`Already on the latest ${channel} version (${current}).`));
     return;
   }
   // A lower version is only legitimate when the user explicitly switches channels
-  // (e.g. nightly → stable). Staying on the same channel should never downgrade —
-  // that only happens transiently when a channel's newest build predates the other
-  // channel's latest release.
-  if (cmp < 0 && !switchedChannel) {
+  // (e.g. nightly → stable) or forces it. Staying on the same channel should never
+  // downgrade — that only happens transiently when a channel's newest build
+  // predates the other channel's latest release.
+  if (cmp < 0 && !switchedChannel && !options.force) {
     console.log(
       chalk.yellow(`The latest ${channel} build (${latest.version}) is older than your installed ${current} — not downgrading.`),
     );
-    console.log(
-      chalk.gray(`\`simon update\` will pick up a newer ${channel} build once one is published.`),
-    );
+    console.log(chalk.gray(`\`simon update\` will pick it up once a newer ${channel} build is published, or use --force.`));
     return;
   }
 
   if (cmp < 0) {
     console.log(
-      chalk.yellow(`Switching to the ${channel} channel — installing ${latest.version} (older than your current ${current}).`),
+      chalk.yellow(`Installing ${latest.version} (${channel}) — older than your current ${current}${switchedChannel ? '' : ', forced'}.`),
     );
+  } else if (cmp === 0) {
+    console.log(`Reinstalling ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
   } else {
     console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
     const notes = await changelogSince(channel, current);
@@ -109,5 +110,6 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(chalk.green(`${cmp < 0 ? 'Switched to' : 'Updated to'} ${latest.version} (${channel}).`));
+  const verb = cmp < 0 ? 'Installed' : cmp === 0 ? 'Reinstalled' : 'Updated to';
+  console.log(chalk.green(`${verb} ${latest.version} (${channel}).`));
 }
