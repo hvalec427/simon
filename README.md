@@ -36,7 +36,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon open-link <url>` | Open a deep link on a running device |
 | `simon logs` | Stream logs from a running device (Ctrl+C to stop) |
 | `simon location <lat,lon>` | Set a simulated GPS location on a simulator/emulator |
-| `simon push <payload>` | Send a push notification to an iOS simulator |
+| `simon push <payload>` | Send a push to a simulator, or a real device with `--token` |
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel (physical-device commands) |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` | Check whether a newer version is available |
@@ -63,6 +63,8 @@ simon launch -i "iPhone 16"  # launch that specific one, no picker
 - `logs -f <expr>` — filter logs (NSPredicate on iOS, regex on Android)
 - `open-link <url> -b <id>` — deliver straight to an app instead of routing via Safari (physical iOS)
 - `open-link <url> -r` — cold-relaunch the app instead of warm-foregrounding it (physical iOS; default keeps the app's current state so you can test deep-link navigation from a background state)
+- `push -t [--fcm]` — print a payload template (`--fcm` for the FCM shape, otherwise the `aps` shape)
+- `push <payload> --token <token> [--fcm|--apns]` — send to a real device via FCM/APNs (credentials from `~/.config/simon/push.json`); see [Push notifications](#push-notifications)
 - `push <payload> -b <id>` — target app bundle id (if not baked into the payload)
 - `push --template` — print an example payload to stdout (e.g. `simon push --template > push.json`)
 
@@ -83,30 +85,76 @@ simon open-link "myapp://path" -i "My iPhone" -b com.example.myapp
 
 ## Push notifications
 
-`simon push` injects a notification straight into a booted simulator via `simctl` — it does **not** go through APNs or Firebase, so it won't exercise your delivery pipeline (tokens, server send). It's for testing how your app *handles* a notification.
+`simon push` sends to a **simulator** (local inject via `simctl`) or to a **real device** via `--token` (through FCM or APNs).
 
-Start from the template, edit it, and send:
+### Simulator
+
+Injected locally — doesn't touch APNs/Firebase, so it tests how your app *handles* a notification, not your delivery pipeline. Start from the template and send:
 
 ```sh
-simon push --template > push.json
+simon push -t > push.json          # aps-shaped payload
 simon push push.json -b com.example.myapp
 ```
 
-The payload is a standard APNs payload — the same shape FCM delivers on iOS. The notification goes under `aps`; any custom **data** goes at the **top level** (that's where it lands in `userInfo`), with string values:
+The `aps` payload — notification under `aps`, custom data at the top level (that's where it lands in `userInfo`):
 
 ```json
 {
-  "aps": {
-    "alert": { "title": "Order update", "body": "Your laundry is on the way 🚚" },
-    "sound": "default",
-    "badge": 1
-  },
-  "order_uuid": "47e8e4ef-db82-4f8c-ab25-5af7c5462185",
-  "redirect": "RC"
+  "aps": { "alert": { "title": "Notification title", "body": "Notification body" }, "sound": "default", "badge": 1 },
+  "custom_data_1": "value1",
+  "custom_data_2": "value2"
 }
 ```
 
-The target app comes from `-b <bundle-id>` (in production this is the APNs topic, which lives outside the payload). The app must have been launched once on the booted simulator. Physical devices and Android aren't supported.
+The target app comes from `-b <bundle-id>` (or a `"Simulator Target Bundle"` key in the payload). The app must have been launched once on the booted simulator.
+
+### Real device (FCM / APNs)
+
+Sends through the real pipeline, addressed by the device's **push token** — so there's no device picker; the token is the destination (a token-capable simulator works too). Credentials come from `~/.config/simon/push.json`.
+
+**One-time setup** — copy one of these into `~/.config/simon/push.json`:
+
+```json
+// FCM — the service-account file holds project id, email and key
+{
+  "transport": "fcm",
+  "fcm": { "serviceAccount": "/absolute/path/to/service-account.json" }
+}
+```
+```json
+// APNs — direct to Apple
+{
+  "transport": "apns",
+  "apns": {
+    "keyFile": "/absolute/path/to/AuthKey_XXXXXX.p8",
+    "keyId": "XXXXXXXXXX",
+    "teamId": "YYYYYYYYYY",
+    "bundleId": "com.example.myapp",
+    "env": "sandbox"
+  }
+}
+```
+Both blocks may coexist; `transport` (or `--fcm` / `--apns`) picks when both are set. APNs `env` is `sandbox` for dev builds/simulators, `production` for TestFlight/App Store.
+
+**Send:**
+```sh
+# FCM payload is shaped differently — get its template with --fcm:
+simon push -t --fcm > fcm.json
+simon push fcm.json  --token <device-fcm-token>      # FCM
+simon push push.json --token <device-apns-token>     # APNs (aps-shaped payload)
+```
+
+The FCM payload is an FCM v1 message body (simon injects the token):
+
+```json
+{
+  "notification": { "title": "Notification title", "body": "Notification body" },
+  "data": { "custom_data_1": "value1", "custom_data_2": "value2" },
+  "apns": { "payload": { "aps": { "sound": "default", "badge": 1 } } }
+}
+```
+
+> No external dependencies — FCM auth (service-account JWT → OAuth) and APNs (`.p8` JWT over HTTP/2) use Node built-ins. simon never stores your credentials; it only reads the files your config points to.
 
 ## Requirements
 

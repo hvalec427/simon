@@ -97,10 +97,13 @@ program
 
 program
   .command('push [payload]')
-  .description('Send a push notification to an iOS simulator (payload = JSON/apns file)')
+  .description('Send a push to an iOS simulator, or to a real device via --token (FCM/APNs)')
   .option('-i, --ios [name]', 'Target a specific iOS simulator by name')
-  .option('-b, --bundle-id <id>', 'App bundle id (if not set in the payload)')
-  .option('-t, --template', 'Print an example payload you can save to a file')
+  .option('-b, --bundle-id <id>', 'App bundle id (simulator; if not set in the payload)')
+  .option('-t, --template', 'Print an example payload (use with --fcm for the FCM shape)')
+  .option('--token <token>', 'Send to a real device with this push token (uses ~/.config/simon/push.json)')
+  .option('--fcm', 'Use FCM (select transport, or pick the FCM template)')
+  .option('--apns', 'Use APNs (select transport)')
   .action(pushCommand);
 
 program
