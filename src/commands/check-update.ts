@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import { spinner } from '../utils/prompt.js';
-import { Channel, currentVersion, latestForChannel, loadChannel } from '../utils/update.js';
+import { Channel, currentVersion, latestForChannel, loadChannel, platformSupported } from '../utils/update.js';
 
 interface CheckUpdateOptions {
   nightly?: boolean;
@@ -8,6 +8,10 @@ interface CheckUpdateOptions {
 }
 
 export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<void> {
+  if (!platformSupported()) {
+    console.error(chalk.yellow('simon self-update is macOS-only (arm64/x64). Build from source on other platforms.'));
+    process.exit(1);
+  }
   const channel: Channel = options.nightly ? 'nightly' : options.stable ? 'stable' : loadChannel();
   const current = currentVersion();
 

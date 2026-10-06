@@ -9,6 +9,7 @@ import {
   latestForChannel,
   needsSudo,
   loadChannel,
+  platformSupported,
   saveChannel,
 } from '../utils/update.js';
 
@@ -31,6 +32,10 @@ function resolveChannel(options: UpdateOptions): Channel {
 }
 
 export async function updateCommand(options: UpdateOptions): Promise<void> {
+  if (!platformSupported()) {
+    console.error(chalk.yellow('simon self-update is macOS-only (arm64/x64). Build from source on other platforms.'));
+    process.exit(1);
+  }
   const channel = resolveChannel(options);
   const current = currentVersion();
 

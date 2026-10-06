@@ -14,6 +14,11 @@ export function currentVersion(): string {
   return process.env.npm_package_version ?? 'unknown';
 }
 
+// Binaries are published for macOS (arm64/x64) only.
+export function platformSupported(): boolean {
+  return process.platform === 'darwin' && (process.arch === 'arm64' || process.arch === 'x64');
+}
+
 function channelConfigPath(): string {
   return path.join(homedir(), '.config', 'simon', 'update.json');
 }
