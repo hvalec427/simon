@@ -1,6 +1,6 @@
 {
   "name": "simon",
-  "version": "2.11.0",
+  "version": "2.12.0",
   "description": "CLI for managing real devices and iOS simulators / Android emulators",
   "type": "module",
   "bin": {

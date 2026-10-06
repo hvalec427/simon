@@ -1,3 +1,10 @@
+# [2.12.0](https://github.com/hvalec427/simon/compare/v2.11.0...v2.12.0) (2026-10-06)
+
+
+### Features
+
+* pick among multiple Metro targets for logs --rn ([6b36244](https://github.com/hvalec427/simon/commit/6b36244c7410c2469ec7eeb217e089b260ee5de1))
+
 # [2.11.0](https://github.com/hvalec427/simon/compare/v2.10.0...v2.11.0) (2026-10-06)
 
 
