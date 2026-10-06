@@ -625,11 +625,11 @@ export function runRnTui(port: number, nameFilter?: string): void {
     sel[tab] = next;
   }
 
-  // Live-follow the first match as the search term is typed — on the list
-  // (list-only or split). In maximized preview mode, search targets the pane,
-  // so typing just updates highlights; use n/N to step through its matches.
+  // Live-follow the first match as the search term is typed — only when the
+  // preview is closed (search targets the list). With the preview open, search
+  // targets the pane, so typing just updates highlights; use n/N to step.
   function jumpFirst(): void {
-    if (!search || (detail && maximized)) return;
+    if (!search || detail) return;
     const hits = matchIndexes();
     if (!hits.length) return;
     const base = follow ? 0 : sel[tab];
@@ -692,8 +692,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
           if (detail) refreshDetail();
         } else {
           search = input;
-          jumpFirst();
-          if (detail && !maximized) refreshDetail(); // split pane follows the list selection
+          jumpFirst(); // list-only; no-op while the preview (split/max) is open
         }
       }
       render();
@@ -730,11 +729,13 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === '/') {
       mode = 'search';
       input = search;
-      if (previewMode) {
-        detailScroll = 0; // preview search starts at the top of the pane
+      if (detail) {
+        detailScroll = 0; // preview search (split or maximized) starts at the pane top
         detailHit = -1;
       }
-    } else if (str === 'z') {
+    } else if (str === 'n') detail ? jumpDetail(1) : jump(1);
+    else if (str === 'N') detail ? jumpDetail(-1) : jump(-1);
+    else if (str === 'z') {
       // Toggle a full-width (maximized) preview; open one if none is up.
       if (!detail) openDetail();
       maximized = !maximized;
@@ -757,8 +758,6 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (previewMode) {
       // ── preview mode: keys drive the maximized pane ───────────────────────
       if (str === 'c') return tab === 'network' ? copyCurl() : copySelection();
-      else if (str === 'n') jumpDetail(1);
-      else if (str === 'N') jumpDetail(-1);
       else if (key.name === 'up' || str === 'k' || str === 'K') scrollDetail(-1);
       else if (key.name === 'down' || str === 'j' || str === 'J') scrollDetail(1);
       else if (key.name === 'pageup') scrollDetail(-h);
@@ -791,8 +790,6 @@ export function runRnTui(port: number, nameFilter?: string): void {
         if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
       } else if (str === 'J') scrollDetail(1); // scroll the split pane (if open)
       else if (str === 'K') scrollDetail(-1);
-      else if (str === 'n') jump(1);
-      else if (str === 'N') jump(-1);
       else if (key.name === 'up' || str === 'k') {
         follow = false;
         sel[tab] = clamp(base - 1, 0, Math.max(0, n - 1));

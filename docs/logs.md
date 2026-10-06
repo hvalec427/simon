@@ -53,7 +53,8 @@ Keys drive the list:
 
 ### Search, objects, and the Network tab
 
-- Search highlights **every** match — the active one (where the selection / `n`·`N` sits) in **yellow**, the rest in **cyan**. On the list, `/` jumps live to the first match and `n`/`N` step through every match (including ones in the status, duration, or GraphQL-op columns).
+- Search highlights **every** match — the active one (where the selection / `n`·`N` sits) in **yellow**, the rest in **cyan**.
+- **Where search looks depends on the pane.** With the preview **closed**, `/` searches the list — it jumps live to the first match and `n`/`N` step the selection through every match (including ones in the status, duration, or GraphQL-op columns). With the preview **open** (split *or* maximized), `/` searches the pane from its top and `n`/`N` step through the pane's matches; the list stays put.
 - A **log with an object** shows the full nested object tree, fetched lazily via `Runtime.getProperties`; nested previews already present in the log event render inline for free.
 - A **network** row shows method, URL, status, **duration**, and (in the pane) request/response **headers and bodies** (JSON pretty-printed). Long values wrap so nothing is cut off.
 - **GraphQL** POSTs show their operation name right in the Network list (e.g. `200 POST …/graphql  GetOrders`), taken from `operationName` or the query. Requests also show their timing (e.g. `123ms`).
