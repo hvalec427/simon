@@ -1,3 +1,10 @@
+## [2.8.1](https://github.com/hvalec427/simon/compare/v2.8.0...v2.8.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* clear message when push targets a real device or Android ([eb2a602](https://github.com/hvalec427/simon/commit/eb2a6021d5c85c55903fc3e628b048a8d73b169d))
+
 # [2.8.0](https://github.com/hvalec427/simon/compare/v2.7.1...v2.8.0) (2026-10-06)
 
 
