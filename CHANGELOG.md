@@ -1,3 +1,10 @@
+## [2.12.1](https://github.com/hvalec427/simon/compare/v2.12.0...v2.12.1) (2026-10-06)
+
+
+### Bug Fixes
+
+* send localhost Origin so Metro accepts the logs --rn connection ([4108eca](https://github.com/hvalec427/simon/commit/4108eca6fdb6cf4e7c836e18db2a10afd4ad0026))
+
 # [2.12.0](https://github.com/hvalec427/simon/compare/v2.11.0...v2.12.0) (2026-10-06)
 
 
