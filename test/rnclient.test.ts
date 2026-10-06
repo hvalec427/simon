@@ -78,9 +78,9 @@ function waitFor<T>(fn: () => T | undefined | false, timeout = 2000): Promise<T>
 describe('RnClient against a fake Metro inspector', () => {
   it('parses console events over CDP', async () => {
     const metro = await startFakeMetro();
-    const client = new RnClient(metro.port, undefined, 50);
+    const client = new RnClient(metro.port, 50);
     const logs: { text: string }[] = [];
-    client.on('log', e => logs.push(e));
+    client.on('log', (_key: string, e: { text: string }) => logs.push(e));
     metro.onConnect(ws => {
       ws.send(JSON.stringify({ method: 'Runtime.consoleAPICalled', params: { type: 'log', args: [{ value: 'hi from app' }] } }));
     });
@@ -93,9 +93,9 @@ describe('RnClient against a fake Metro inspector', () => {
     await metro.close();
   });
 
-  it('auto-reconnects when the socket drops', async () => {
+  it('auto-reconnects (via polling) when the socket drops', async () => {
     const metro = await startFakeMetro();
-    const client = new RnClient(metro.port, undefined, 50);
+    const client = new RnClient(metro.port, 50);
     client.start();
 
     await waitFor(() => metro.connections >= 1);

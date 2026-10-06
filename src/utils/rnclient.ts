@@ -7,6 +7,25 @@ export interface LogEntry {
   text: string;
 }
 
+export interface TargetInfo {
+  key: string;
+  label: string;
+}
+
+export interface NetRecord {
+  id: string;
+  method: string;
+  url: string;
+  status?: number;
+  mimeType?: string;
+  reqHeaders?: Record<string, string>;
+  reqBody?: string;
+  resHeaders?: Record<string, string>;
+  resBody?: string;
+}
+
+export type Status = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+
 interface RnTarget {
   webSocketDebuggerUrl?: string;
   title?: string;
@@ -42,14 +61,12 @@ function previewToString(p: ObjectPreview): string {
 function renderArg(a: RemoteObject): string {
   if (a == null) return '';
   if (a.value !== undefined) return typeof a.value === 'string' ? a.value : JSON.stringify(a.value);
-  // Objects/arrays aren't serialized by value over CDP — use the preview.
   if (a.preview) return previewToString(a.preview);
   if (a.description) return a.description;
   if (a.unserializableValue) return a.unserializableValue;
   return a.type ?? '';
 }
 
-// Map a CDP message to a log entry, or null if it's not something we render.
 export function toEntry(msg: { method?: string; params?: any }): LogEntry | null {
   switch (msg.method) {
     case 'Runtime.consoleAPICalled': {
@@ -64,217 +81,147 @@ export function toEntry(msg: { method?: string; params?: any }): LogEntry | null
       const d = msg.params?.exceptionDetails ?? {};
       return { kind: 'console', level: 'error', text: d.exception?.description ?? d.text ?? 'Uncaught exception' };
     }
-    case 'Network.requestWillBeSent': {
-      const r = msg.params?.request ?? {};
-      return { kind: 'network', level: 'request', text: `→ ${r.method ?? 'GET'} ${r.url ?? ''}` };
-    }
-    case 'Network.responseReceived': {
-      const r = msg.params?.response ?? {};
-      const status = r.status;
-      return {
-        kind: 'network',
-        level: typeof status === 'number' && status >= 400 ? 'error' : 'response',
-        text: `← ${status ?? ''} ${r.url ?? ''}`,
-      };
-    }
     default:
       return null;
   }
 }
 
-export type Status = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
+const keyOf = (t: RnTarget) => t.deviceName || t.title || 'app';
+
+interface Conn {
+  key: string;
+  ws?: WebSocket;
+  connected: boolean;
+  netRecords: Map<string, NetRecord>;
+  cmdSeq: number;
+}
 
 /**
- * Connects to Metro's inspector (CDP) and emits log entries. Auto-reconnects when
- * the app closes/crashes by re-resolving the target and dialing back in.
- *   'log'     → (LogEntry)
- *   'status'  → (Status, who?)
- *   'network' → (boolean)  whether the Network domain is supported
+ * Connects to EVERY React Native target on Metro at once and keeps them alive,
+ * so the UI can switch between devices instantly (no reconnect). Events are
+ * tagged with the target key.
+ *   'targets'        → (TargetInfo[])
+ *   'status'         → (key, Status)
+ *   'log'            → (key, LogEntry)
+ *   'net'            → (key, NetRecord)
+ *   'network'        → (key, boolean)   Network domain supported?
+ *   'contextcleared' → (key)
  */
-export interface TargetInfo {
-  key: string;
-  label: string;
-}
-
-export interface NetRecord {
-  id: string;
-  method: string;
-  url: string;
-  status?: number;
-  mimeType?: string;
-  reqHeaders?: Record<string, string>;
-  reqBody?: string;
-  resHeaders?: Record<string, string>;
-  resBody?: string;
-}
-
 export class RnClient extends EventEmitter {
-  private ws?: WebSocket;
+  private conns = new Map<string, Conn>();
   private stopped = false;
   private timer?: ReturnType<typeof setTimeout>;
-  private targets: TargetInfo[] = [];
-  private selectedKey?: string;
-  private netRecords = new Map<string, NetRecord>();
-  private cmdSeq = 1000;
-  private connected = false;
 
-  constructor(private port: number, private nameFilter?: string, private retryMs = 2000) {
+  constructor(private port: number, private pollMs = 3000) {
     super();
   }
 
-  // Switch to the target at `index` from the last published target list.
-  select(index: number): void {
-    const t = this.targets[index];
-    if (!t) return;
-    this.selectedKey = t.key;
-    this.netRecords.clear();
-    this.reconnectNow(true);
-  }
-
-  // Clear persists across reconnects only if the device forgets its console
-  // history — otherwise Hermes replays it on the next Runtime.enable.
-  discardConsole(): void {
-    this.netRecords.clear();
-    if (!this.ws) return;
-    try {
-      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Runtime.discardConsoleEntries' }));
-      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Log.clear' }));
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // Ask the app to reload (like the "r" in React Native DevTools). Best-effort:
-  // sends whichever reload the connected target understands.
-  reloadApp(): void {
-    if (!this.ws) return;
-    try {
-      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'Page.reload' }));
-      this.ws.send(JSON.stringify({ id: this.cmdSeq++, method: 'ReactNativeApplication.reload' }));
-    } catch {
-      /* ignore */
-    }
-  }
-
   start(): void {
-    this.connect();
-  }
-
-  // `force` reconnects even when already connected (used for device switches);
-  // the manual reconnect key is a no-op while the connection is live.
-  reconnectNow(force = false): void {
-    if (this.connected && !force) return;
-    this.teardown();
-    this.connect();
+    this.poll();
   }
 
   stop(): void {
     this.stopped = true;
-    this.teardown();
+    if (this.timer) clearTimeout(this.timer);
+    for (const c of this.conns.values()) this.closeConn(c);
+    this.conns.clear();
   }
 
-  private teardown(): void {
-    this.connected = false;
+  // Reconnect any dead targets now (live ones are left alone).
+  reconnectNow(): void {
     if (this.timer) clearTimeout(this.timer);
-    if (this.ws) {
+    this.poll();
+  }
+
+  reloadApp(key: string): void {
+    const ws = this.conns.get(key)?.ws;
+    if (!ws) return;
+    const c = this.conns.get(key)!;
+    try {
+      ws.send(JSON.stringify({ id: c.cmdSeq++, method: 'Page.reload' }));
+      ws.send(JSON.stringify({ id: c.cmdSeq++, method: 'ReactNativeApplication.reload' }));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  discardConsole(key: string): void {
+    const c = this.conns.get(key);
+    if (!c) return;
+    c.netRecords.clear();
+    if (!c.ws) return;
+    try {
+      c.ws.send(JSON.stringify({ id: c.cmdSeq++, method: 'Runtime.discardConsoleEntries' }));
+      c.ws.send(JSON.stringify({ id: c.cmdSeq++, method: 'Log.clear' }));
+    } catch {
+      /* ignore */
+    }
+  }
+
+  private closeConn(c: Conn): void {
+    if (c.ws) {
       try {
-        this.ws.removeAllListeners();
-        this.ws.close();
+        c.ws.removeAllListeners();
+        c.ws.close();
       } catch {
         /* ignore */
       }
-      this.ws = undefined;
+      c.ws = undefined;
     }
+    c.connected = false;
   }
 
-  private handleNetwork(msg: { method?: string; params?: any }, fetchBody: (id: string) => void): void {
-    const p = msg.params ?? {};
-    if (msg.method === 'Network.requestWillBeSent') {
-      const r = p.request ?? {};
-      const rec: NetRecord = {
-        id: p.requestId,
-        method: r.method ?? 'GET',
-        url: r.url ?? '',
-        reqHeaders: r.headers,
-        reqBody: r.postData,
-      };
-      this.netRecords.set(p.requestId, rec);
-      this.emit('net', rec);
-    } else if (msg.method === 'Network.responseReceived') {
-      const rec = this.netRecords.get(p.requestId);
-      if (rec) {
-        const res = p.response ?? {};
-        rec.status = res.status;
-        rec.resHeaders = res.headers;
-        rec.mimeType = res.mimeType;
-        this.emit('net', rec);
-      }
-    } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
-      if (this.netRecords.has(p.requestId)) fetchBody(p.requestId);
-    }
-  }
-
-  private retryLater(): void {
+  private async poll(): Promise<void> {
     if (this.stopped) return;
-    this.emit('status', 'disconnected');
-    this.timer = setTimeout(() => this.connect(), this.retryMs);
-  }
 
-  private async connect(): Promise<void> {
-    if (this.stopped) return;
-    this.emit('status', 'connecting');
-
-    let targets: RnTarget[];
+    let targets: RnTarget[] = [];
     try {
       const res = await fetch(`http://localhost:${this.port}/json`);
-      if (!res.ok) throw new Error();
-      targets = (await res.json()) as RnTarget[];
+      if (res.ok) targets = (await res.json()) as RnTarget[];
     } catch {
-      this.retryLater();
-      return;
+      /* Metro down — keep existing conns, retry next tick */
     }
 
-    const all = targets.filter(t => t.webSocketDebuggerUrl);
-    const keyOf = (t: RnTarget) => t.deviceName || t.title || 'app';
-    this.targets = all.map(t => ({ key: keyOf(t), label: keyOf(t) }));
-    this.emit('targets', this.targets);
+    const live = targets.filter(t => t.webSocketDebuggerUrl);
+    this.emit('targets', live.map(t => ({ key: keyOf(t), label: keyOf(t) })));
 
-    let list = all;
-    if (this.nameFilter) {
-      const n = this.nameFilter.toLowerCase();
-      const matched = list.filter(
-        t => (t.deviceName ?? '').toLowerCase().includes(n) || (t.title ?? '').toLowerCase().includes(n),
-      );
-      if (matched.length) list = matched;
-    }
-    // Prefer an explicitly selected device (by key) across reconnects.
-    const target = (this.selectedKey && all.find(t => keyOf(t) === this.selectedKey)) || list[0];
-    if (!target?.webSocketDebuggerUrl) {
-      this.retryLater();
-      return;
+    for (const t of live) {
+      const key = keyOf(t);
+      const existing = this.conns.get(key);
+      if (!existing || !existing.connected) this.openConn(key, t.webSocketDebuggerUrl!);
     }
 
-    const ws = new WebSocket(target.webSocketDebuggerUrl, { origin: `http://localhost:${this.port}` });
-    this.ws = ws;
+    if (!this.stopped) this.timer = setTimeout(() => this.poll(), this.pollMs);
+  }
+
+  private openConn(key: string, url: string): void {
+    let conn = this.conns.get(key);
+    if (!conn) {
+      conn = { key, connected: false, netRecords: new Map(), cmdSeq: 1000 };
+      this.conns.set(key, conn);
+    }
+    if (conn.connected || conn.ws) return;
+
+    const ws = new WebSocket(url, { origin: `http://localhost:${this.port}` });
+    conn.ws = ws;
+    this.emit('status', key, 'connecting');
+
     let id = 1;
     const send = (method: string) => ws.send(JSON.stringify({ id: id++, method }));
     const NETWORK_ENABLE_ID = 3;
-
-    // Response bodies are fetched on demand; map our getResponseBody call id → requestId.
     const pendingBody = new Map<number, string>();
-    let cmdId = 100;
     const fetchBody = (requestId: string) => {
-      const c = cmdId++;
+      const c = conn!.cmdSeq++;
       pendingBody.set(c, requestId);
       ws.send(JSON.stringify({ id: c, method: 'Network.getResponseBody', params: { requestId } }));
     };
 
     ws.on('open', () => {
-      this.connected = true;
+      conn!.connected = true;
       send('Runtime.enable');
       send('Log.enable');
       send('Network.enable');
-      this.emit('status', 'connected', target.title ?? target.deviceName ?? 'app');
+      this.emit('status', key, 'connected');
     });
     ws.on('message', data => {
       let msg: any;
@@ -284,40 +231,61 @@ export class RnClient extends EventEmitter {
         return;
       }
       if (msg.id === NETWORK_ENABLE_ID) {
-        this.emit('network', !msg.error);
+        this.emit('network', key, !msg.error);
         return;
       }
       if (msg.id && pendingBody.has(msg.id)) {
         const reqId = pendingBody.get(msg.id)!;
         pendingBody.delete(msg.id);
-        const rec = this.netRecords.get(reqId);
+        const rec = conn!.netRecords.get(reqId);
         if (rec && msg.result) {
           rec.resBody = msg.result.base64Encoded
             ? Buffer.from(msg.result.body ?? '', 'base64').toString('utf8')
             : msg.result.body;
-          this.emit('net', rec);
+          this.emit('net', key, rec);
         }
         return;
       }
-      // Fast refresh / reload resets the JS context — treat as a reload.
       if (msg.method === 'Runtime.executionContextsCleared') {
-        this.netRecords.clear();
-        this.emit('contextcleared');
+        conn!.netRecords.clear();
+        this.emit('contextcleared', key);
         return;
       }
       if (typeof msg.method === 'string' && msg.method.startsWith('Network.')) {
-        this.handleNetwork(msg, fetchBody);
+        this.handleNetwork(conn!, key, msg, fetchBody);
         return;
       }
       const entry = toEntry(msg);
-      if (entry) this.emit('log', entry);
+      if (entry) this.emit('log', key, entry);
     });
     ws.on('close', () => {
-      this.connected = false;
-      if (!this.stopped) this.retryLater();
+      conn!.connected = false;
+      conn!.ws = undefined;
+      if (!this.stopped) this.emit('status', key, 'disconnected');
     });
     ws.on('error', () => {
-      /* 'close' fires next and triggers the retry */
+      /* 'close' follows; poll will reopen */
     });
+  }
+
+  private handleNetwork(conn: Conn, key: string, msg: { method?: string; params?: any }, fetchBody: (id: string) => void): void {
+    const p = msg.params ?? {};
+    if (msg.method === 'Network.requestWillBeSent') {
+      const r = p.request ?? {};
+      const rec: NetRecord = { id: p.requestId, method: r.method ?? 'GET', url: r.url ?? '', reqHeaders: r.headers, reqBody: r.postData };
+      conn.netRecords.set(p.requestId, rec);
+      this.emit('net', key, rec);
+    } else if (msg.method === 'Network.responseReceived') {
+      const rec = conn.netRecords.get(p.requestId);
+      if (rec) {
+        const res = p.response ?? {};
+        rec.status = res.status;
+        rec.resHeaders = res.headers;
+        rec.mimeType = res.mimeType;
+        this.emit('net', key, rec);
+      }
+    } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
+      if (conn.netRecords.has(p.requestId)) fetchBody(p.requestId);
+    }
   }
 }

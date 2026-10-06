@@ -231,9 +231,17 @@ export function renderFrame(s: FrameState): string {
 
 // ── TUI runtime ─────────────────────────────────────────────────────────────
 
+interface Device {
+  logs: LogEntry[];
+  net: NetRecord[];
+  status: Status;
+  networkSupported?: boolean;
+  wasDisconnected: boolean;
+}
+
 export function runRnTui(port: number, nameFilter?: string): void {
-  const buffers: Record<Tab, LogEntry[]> = { logs: [], network: [] };
-  let netRecords: NetRecord[] = [];
+  const devices = new Map<string, Device>();
+  let activeKey: string | undefined;
   const sel: Record<Tab, number> = { logs: 0, network: 0 };
   let follow = true;
   let detail = false;
@@ -244,70 +252,85 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let mode: 'normal' | 'filter' | 'search' = 'normal';
   let input = '';
   let clearOnRestart = false;
-  let status: Status = 'connecting';
-  let who = '';
-  let networkSupported: boolean | undefined;
-  let wasDisconnected = false;
   let targets: TargetInfo[] = [];
+  const EMPTY: Device = { logs: [], net: [], status: 'connecting', wasDisconnected: false };
 
-  const client = new RnClient(port, nameFilter);
-  client.on('log', (e: LogEntry) => {
-    buffers.logs.push(e);
-    if (buffers.logs.length > MAX_LINES) buffers.logs.shift();
-    render();
+  function dev(key: string): Device {
+    let d = devices.get(key);
+    if (!d) {
+      d = { logs: [], net: [], status: 'connecting', wasDisconnected: false };
+      devices.set(key, d);
+    }
+    return d;
+  }
+  const active = () => (activeKey ? dev(activeKey) : EMPTY);
+
+  const client = new RnClient(port);
+  client.on('log', (key: string, e: LogEntry) => {
+    const d = dev(key);
+    d.logs.push(e);
+    if (d.logs.length > MAX_LINES) d.logs.shift();
+    if (key === activeKey) render();
   });
-  client.on('net', (rec: NetRecord) => {
-    const i = netRecords.findIndex(r => r.id === rec.id);
-    if (i >= 0) netRecords[i] = rec;
+  client.on('net', (key: string, rec: NetRecord) => {
+    const d = dev(key);
+    const i = d.net.findIndex(r => r.id === rec.id);
+    if (i >= 0) d.net[i] = rec;
     else {
-      netRecords.push(rec);
-      if (netRecords.length > MAX_NET) netRecords.shift();
+      d.net.push(rec);
+      if (d.net.length > MAX_NET) d.net.shift();
     }
-    networkSupported = true;
-    render();
+    d.networkSupported = true;
+    if (key === activeKey) render();
   });
-  client.on('status', (s: Status, w?: string) => {
-    if (s === 'disconnected') wasDisconnected = true;
+  client.on('status', (key: string, s: Status) => {
+    const d = dev(key);
+    if (s === 'disconnected') d.wasDisconnected = true;
     if (s === 'connected') {
-      if (wasDisconnected && clearOnRestart) {
-        buffers.logs.length = 0;
-        netRecords = [];
+      if (d.wasDisconnected && clearOnRestart) {
+        d.logs.length = 0;
+        d.net.length = 0;
       }
-      wasDisconnected = false;
+      d.wasDisconnected = false;
     }
-    status = s;
-    if (w) who = w;
-    render();
+    d.status = s;
+    if (key === activeKey) render();
   });
-  client.on('network', (ok: boolean) => {
-    networkSupported = ok;
-    render();
+  client.on('network', (key: string, ok: boolean) => {
+    dev(key).networkSupported = ok;
+    if (key === activeKey) render();
   });
-  client.on('contextcleared', () => {
-    // App reloaded (fast refresh / manual reload) — honour the clear toggle.
+  client.on('contextcleared', (key: string) => {
+    const d = dev(key);
     if (clearOnRestart) {
-      buffers.logs.length = 0;
-      netRecords = [];
+      d.logs.length = 0;
+      d.net.length = 0;
     }
-    render();
+    if (key === activeKey) render();
   });
   client.on('targets', (list: TargetInfo[]) => {
     targets = list;
+    for (const t of list) dev(t.key);
+    if (!activeKey && list.length) {
+      const match = nameFilter && list.find(t => t.key.toLowerCase().includes(nameFilter.toLowerCase()));
+      activeKey = (match && match.key) || list[0].key;
+    }
     render();
   });
 
   const height = () => frameHeight(process.stdout.rows ?? 24, targets.length > 1);
-  const items = () => (tab === 'logs' ? filterEntries(buffers.logs, filter) : filterRecords(netRecords, filter));
+  const items = () => (tab === 'logs' ? filterEntries(active().logs, filter) : filterRecords(active().net, filter));
   const count = () => items().length;
 
   function render(): void {
+    const d = active();
     process.stdout.write(
       renderFrame({
         cols: process.stdout.columns ?? 80,
         rows: process.stdout.rows ?? 24,
         tab,
-        buffers,
-        netRecords,
+        buffers: { logs: d.logs, network: [] },
+        netRecords: d.net,
         sel: sel[tab],
         follow,
         detail,
@@ -317,9 +340,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
         mode,
         input,
         clearOnRestart,
-        status,
-        who,
-        networkSupported,
+        status: d.status,
+        who: activeKey ?? '',
+        networkSupported: d.networkSupported,
         targets,
       }),
     );
@@ -412,9 +435,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
       mode = 'filter';
       input = filter;
     } else if (str === 'c') {
-      buffers.logs.length = 0;
-      netRecords = [];
-      client.discardConsole(); // so a reconnect/device-switch won't replay them
+      active().logs.length = 0;
+      active().net.length = 0;
+      if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str === 'a') {
       follow = !follow;
@@ -422,13 +445,14 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str && /^[1-9]$/.test(str)) {
       const idx = Number(str) - 1;
       if (idx < targets.length) {
-        buffers.logs.length = 0;
-        netRecords = [];
-        client.select(idx);
+        // Instant view switch — the other device stays connected in the background.
+        activeKey = targets[idx].key;
+        detail = false;
       }
     } else if (str === 'r') client.reconnectNow();
-    else if (str === 'R') client.reloadApp();
-    else if (key.name === 'return') {
+    else if (str === 'R') {
+      if (activeKey) client.reloadApp(activeKey);
+    } else if (key.name === 'return') {
       if (n > 0) {
         detail = true;
         detailScroll = 0;

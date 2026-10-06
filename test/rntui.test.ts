@@ -52,13 +52,8 @@ describe('toEntry', () => {
     expect(e).toEqual({ kind: 'console', level: 'warn', text: 'hi' });
   });
 
-  it('maps network responses, flagging 4xx+ as error', () => {
-    const e = toEntry({ method: 'Network.responseReceived', params: { response: { status: 500, url: 'u' } } });
-    expect(e?.kind).toBe('network');
-    expect(e?.level).toBe('error');
-  });
-
-  it('ignores unrelated methods', () => {
+  it('ignores unrelated methods (incl. Network.*, handled separately)', () => {
+    expect(toEntry({ method: 'Network.responseReceived', params: {} })).toBeNull();
     expect(toEntry({ method: 'Debugger.paused' })).toBeNull();
   });
 
