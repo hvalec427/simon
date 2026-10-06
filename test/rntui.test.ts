@@ -218,6 +218,26 @@ describe('renderFrame', () => {
     });
     expect(f).toContain('"user": "ziga"');
   });
+
+  it('shows the list and detail side by side when a row is expanded', () => {
+    const f = frame({
+      detail: true,
+      rows: 20,
+      buffers: {
+        logs: [
+          { kind: 'console', level: 'log', text: 'alpha-row' },
+          { kind: 'console', level: 'log', text: '{"user":"ziga"}' },
+        ],
+        network: [],
+      },
+      sel: 1,
+      follow: false,
+    });
+    expect(f).toContain('alpha-row'); // list still visible (left pane)
+    expect(f).toContain('"user": "ziga"'); // detail (right pane)
+    expect(f).toContain('│'); // column separator
+    expect(f).toContain('JK scroll detail'); // footer reflects split-pane controls
+  });
 });
 
 describe('logDetailLines', () => {

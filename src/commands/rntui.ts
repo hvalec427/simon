@@ -271,7 +271,7 @@ export function renderFrame(s: FrameState): string {
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
   else if (s.flash) foot = ` ${s.flash}`;
-  else if (s.detail) foot = ` ⏎/esc close · ↑↓/jk scroll · g/G top/bottom · / search${s.search ? ' · n/N' : ''} · y copy · q quit`;
+  else if (s.detail) foot = ` ⏎/esc close · jk list · JK scroll detail · / search${s.search ? ' · n/N' : ''} · y copy · q quit`;
   else
     foot =
       ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand · y copy` +
@@ -297,11 +297,29 @@ export function renderFrame(s: FrameState): string {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
   } else if (s.detail && len > 0) {
-    const dl = detailViewLines(s, items[effSel], cols);
-    const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
+    // Side-by-side: list on the left, detail pane on the right.
+    const sep = chalk.gray('│');
+    const leftW = Math.max(16, Math.floor(cols * 0.45));
+    const rightW = Math.max(1, cols - leftW - 1);
+    const listStart = clamp(effSel - Math.floor(h / 2), 0, Math.max(0, len - h));
+    const dl = detailViewLines(s, items[effSel], rightW);
+    const dStart = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
     for (let i = 0; i < h; i++) {
-      const l = dl[start + i];
-      body.push(l === undefined ? '' : highlight(l, s.search));
+      const idx = listStart + i;
+      const item = items[idx];
+      let left: string;
+      if (!item) {
+        left = pad('', leftW);
+      } else {
+        const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
+        const t = pad(oneLine(rawText).slice(0, leftW), leftW);
+        if (idx === effSel) left = chalk.inverse(t);
+        else if (isLogs) left = levelColor(item as LogEntry)(t);
+        else left = netSummary(item as NetRecord).error ? chalk.redBright(t) : chalk.whiteBright(t);
+      }
+      const dline = dl[dStart + i];
+      const right = dline === undefined ? pad('', rightW) : highlight(pad(oneLine(dline).slice(0, rightW), rightW), s.search);
+      body.push(left + sep + right);
     }
   } else {
     const start = s.follow ? Math.max(0, len - h) : clamp(effSel - Math.floor(h / 2), 0, Math.max(0, len - h));
@@ -478,6 +496,46 @@ export function runRnTui(port: number, nameFilter?: string): void {
     detailToken++; // cancel any in-flight fetch
   }
 
+  // (Re)load the detail pane for the current selection — reset scroll/search and
+  // lazily fetch the deep object tree for a log with object args.
+  function refreshDetail(): void {
+    detailScroll = 0;
+    detailHit = -1;
+    detailLines = null;
+    detailLoading = false;
+    detailToken++;
+    const list = items();
+    if (!list.length) return;
+    const effSel = follow ? list.length - 1 : Math.min(sel[tab], list.length - 1);
+    const it = list[effSel];
+    if (tab === 'logs' && activeKey && (it as LogEntry)?.argObjectIds?.length) {
+      detailLoading = true;
+      const token = detailToken;
+      const text = (it as LogEntry).text;
+      client
+        .getObjectTree(activeKey, (it as LogEntry).argObjectIds!)
+        .then(tree => {
+          if (token === detailToken) {
+            detailLines = [text, '', ...tree];
+            detailLoading = false;
+            render();
+          }
+        })
+        .catch(() => {
+          if (token === detailToken) {
+            detailLoading = false;
+            render();
+          }
+        });
+    }
+  }
+
+  function openDetail(): void {
+    if (count() === 0) return;
+    detail = true;
+    refreshDetail();
+  }
+
   function switchTab(dir: 1 | -1): void {
     tab = TABS[(TABS.indexOf(tab) + dir + TABS.length) % TABS.length];
     closeDetail();
@@ -602,15 +660,19 @@ export function runRnTui(port: number, nameFilter?: string): void {
         mode = 'normal';
       } else if (key.name === 'backspace') {
         input = input.slice(0, -1);
-        if (mode === 'filter') filter = input;
-        else {
+        if (mode === 'filter') {
+          filter = input;
+          if (detail) refreshDetail();
+        } else {
           search = input;
           jumpFirst();
         }
       } else if (str && !key.ctrl) {
         input += str;
-        if (mode === 'filter') filter = input;
-        else {
+        if (mode === 'filter') {
+          filter = input;
+          if (detail) refreshDetail();
+        } else {
           search = input;
           jumpFirst();
         }
@@ -623,38 +685,16 @@ export function runRnTui(port: number, nameFilter?: string): void {
 
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
 
-    if (detail) {
-      const h = height();
-      const max = Math.max(0, detailLinesNow().length - h);
-      if (key.name === 'return' || key.name === 'escape') closeDetail();
-      else if (str && /^[1-9]$/.test(str)) {
-        const idx = Number(str) - 1;
-        if (idx < targets.length) {
-          activeKey = targets[idx].key; // switch device; the preview belonged to the old one
-          closeDetail();
-        }
-      } else if (str === '/') {
-        mode = 'search';
-        input = search;
-      } else if (str === 'y') return copySelection();
-      else if (str === 'n') jumpDetail(1);
-      else if (str === 'N') jumpDetail(-1);
-      else {
-        if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
-        else if (key.name === 'down' || str === 'j') detailScroll = Math.min(max, detailScroll + 1);
-        else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - h);
-        else if (key.name === 'pagedown') detailScroll = Math.min(max, detailScroll + h);
-        else if (str === 'g') detailScroll = 0;
-        else if (str === 'G') detailScroll = max;
-        detailHit = -1; // manual scroll — n/N should resume from here
-      }
-      render();
-      return;
-    }
-
     const h = height();
     const n = count();
     const base = follow ? n - 1 : sel[tab];
+    const prevSel = sel[tab];
+    const prevFollow = follow;
+    const prevKey = activeKey;
+    const prevFilter = filter;
+    const prevErrors = errorsOnly;
+    const prevMethod = method;
+    const detailMax = () => Math.max(0, detailLinesNow().length - h);
     const toLast = () => {
       follow = true;
       sel[tab] = Math.max(0, n - 1);
@@ -673,6 +713,10 @@ export function runRnTui(port: number, nameFilter?: string): void {
     else if (str === '/') {
       mode = 'search';
       input = search;
+      if (detail) {
+        detailScroll = 0; // search always starts at the top of the preview
+        detailHit = -1;
+      }
     } else if (str === 'f') {
       mode = 'filter';
       input = filter;
@@ -690,45 +734,26 @@ export function runRnTui(port: number, nameFilter?: string): void {
       if (follow) sel[tab] = Math.max(0, n - 1);
     } else if (str && /^[1-9]$/.test(str)) {
       const idx = Number(str) - 1;
-      if (idx < targets.length) {
-        // Instant view switch — the other device stays connected in the background.
-        activeKey = targets[idx].key;
-        closeDetail();
-      }
+      // Instant view switch — the other device stays connected in the background.
+      if (idx < targets.length) activeKey = targets[idx].key;
     } else if (str === 'r') client.reconnectNow();
     else if (str === 'R') {
       if (activeKey) client.reloadApp(activeKey);
-    } else if (key.name === 'return') {
-      if (n > 0) {
-        detail = true;
-        detailScroll = 0;
+    } else if (key.name === 'return' || key.name === 'escape') {
+      detail ? closeDetail() : openDetail();
+    } else if (str === 'J') {
+      // Scroll the detail pane (list selection stays put).
+      if (detail) {
+        detailScroll = Math.min(detailMax(), detailScroll + 1);
         detailHit = -1;
-        detailLines = null;
-        detailLoading = false;
-        const effSel = follow ? n - 1 : Math.min(sel[tab], n - 1);
-        const it = items()[effSel] as LogEntry | undefined;
-        if (tab === 'logs' && activeKey && it?.argObjectIds?.length) {
-          detailLoading = true;
-          const token = ++detailToken;
-          client
-            .getObjectTree(activeKey, it.argObjectIds)
-            .then(tree => {
-              if (token === detailToken) {
-                detailLines = [it.text, '', ...tree];
-                detailLoading = false;
-                render();
-              }
-            })
-            .catch(() => {
-              if (token === detailToken) {
-                detailLoading = false;
-                render();
-              }
-            });
-        }
       }
-    } else if (str === 'n') jump(1);
-    else if (str === 'N') jump(-1);
+    } else if (str === 'K') {
+      if (detail) {
+        detailScroll = Math.max(0, detailScroll - 1);
+        detailHit = -1;
+      }
+    } else if (str === 'n') detail ? jumpDetail(1) : jump(1);
+    else if (str === 'N') detail ? jumpDetail(-1) : jump(-1);
     else if (key.name === 'up' || str === 'k') {
       follow = false;
       sel[tab] = clamp(base - 1, 0, Math.max(0, n - 1));
@@ -741,6 +766,19 @@ export function runRnTui(port: number, nameFilter?: string): void {
       follow = false;
       sel[tab] = 0;
     } else if (str === 'G') toLast();
+
+    // When the split pane is open, keep it in sync with whatever the list now shows.
+    if (
+      detail &&
+      (sel[tab] !== prevSel ||
+        follow !== prevFollow ||
+        activeKey !== prevKey ||
+        filter !== prevFilter ||
+        errorsOnly !== prevErrors ||
+        method !== prevMethod)
+    ) {
+      refreshDetail();
+    }
     render();
   }
 
