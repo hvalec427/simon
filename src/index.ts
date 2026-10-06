@@ -67,6 +67,8 @@ program
   .option('-a, --android [name]', 'Stream logs from Android emulator or device')
   .option('-f, --filter <expression>', 'Filter expression (predicate for iOS, regex for Android)')
   .option('--app <name>', 'Show only this app\'s logs (process/app name; bundle id also works on iOS simulators)')
+  .option('--rn', 'Stream React Native JS console + network from Metro (CDP), not device logs')
+  .option('--port <port>', 'Metro port for --rn (default 8081)')
   .action(logsCommand);
 
 program

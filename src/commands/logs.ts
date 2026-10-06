@@ -5,12 +5,15 @@ import { homedir } from 'os';
 import path from 'path';
 import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
+import { streamReactNativeLogs } from '../utils/rnlogs.js';
 
 interface LogsOptions {
   ios?: string | boolean;
   android?: string | boolean;
   filter?: string;
   app?: string;
+  rn?: boolean;
+  port?: string;
 }
 
 function getAdb(): string {
@@ -47,6 +50,11 @@ export async function logsCommand(options: LogsOptions): Promise<void> {
     : undefined;
 
   try {
+    if (options.rn) {
+      await streamReactNativeLogs(options.port ? Number(options.port) : 8081);
+      return;
+    }
+
     const device = await pickRunningDevice('Select a device to stream logs from:', platform, name);
     console.log(chalk.cyan(`Streaming logs from ${device.name}`) + chalk.gray('  (Ctrl+C to stop)\n'));
     streamLogs(device, options.filter, options.app);
