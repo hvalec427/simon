@@ -87,8 +87,12 @@ NOTES=$(mktemp)
   echo "_Apple Silicon shown; on Intel use \`simon-darwin-x64\`. Already installed? \`simon update --nightly\`._"
 } > "${NOTES}"
 
+# --target the built develop commit: without it, gh tags the repo's default
+# branch (master) HEAD, so PREV..HEAD would span the whole develop/master
+# divergence and every nightly would re-list everything.
 gh release create "${TAG}" \
   --prerelease \
+  --target "$(git rev-parse HEAD)" \
   --title "${TAG}" \
   --notes-file "${NOTES}" \
   simon-darwin-arm64 simon-darwin-x64
