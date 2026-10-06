@@ -24,13 +24,6 @@ const TEMPLATE = {
 
 function explainSimulatorOnly(): void {
   console.error(chalk.red('Push notifications can only be sent to an iOS simulator.'));
-  console.error(
-    chalk.gray(
-      "`simctl push` injects a notification into a simulator; a real device can only receive one\n" +
-        'through APNs (iOS) or FCM (Android) — which needs push credentials and the device token.',
-    ),
-  );
-  console.error(chalk.gray('Boot a simulator with `simon launch -i`, or use the Firebase console for real-device tests.'));
 }
 
 export async function pushCommand(payload: string | undefined, options: PushOptions): Promise<void> {
