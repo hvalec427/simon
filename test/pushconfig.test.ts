@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { resolveTransport } from '../src/utils/pushconfig';
+import path from 'path';
+import { homedir } from 'os';
+import { expandPath, resolveTransport } from '../src/utils/pushconfig';
 import { base64url } from '../src/utils/jwt';
 
 describe('resolveTransport', () => {
@@ -35,6 +37,15 @@ describe('resolveTransport', () => {
 
   it('throws when neither block exists', () => {
     expect(() => resolveTransport({})).toThrow();
+  });
+});
+
+describe('expandPath', () => {
+  it('expands a leading ~ to the home directory', () => {
+    expect(expandPath('~/secrets/sa.json')).toBe(path.join(homedir(), 'secrets/sa.json'));
+  });
+  it('leaves absolute paths intact', () => {
+    expect(expandPath('/abs/key.p8')).toBe('/abs/key.p8');
   });
 });
 

@@ -45,6 +45,11 @@ jobs:
       - name: Test
         run: npm test
 
+      # semantic-release records releases as git notes; without the existing
+      # notes ref its push fails ("fatal error in commit_refs"). Fetch it first.
+      - name: Fetch git notes
+        run: git fetch origin "+refs/notes/*:refs/notes/*" || true
+
       - name: Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

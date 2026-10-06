@@ -6,6 +6,7 @@ import path from 'path';
 import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
 import { streamReactNativeLogs } from '../utils/rnlogs.js';
+import { runRnTui } from './rntui.js';
 
 interface LogsOptions {
   ios?: string | boolean;
@@ -51,7 +52,10 @@ export async function logsCommand(options: LogsOptions): Promise<void> {
 
   try {
     if (options.rn) {
-      await streamReactNativeLogs(options.port ? Number(options.port) : 8081, name);
+      const port = options.port ? Number(options.port) : 8081;
+      // Interactive TUI in a terminal; plain line stream when piped/redirected.
+      if (process.stdout.isTTY) runRnTui(port, name);
+      else await streamReactNativeLogs(port, name);
       return;
     }
 

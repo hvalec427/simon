@@ -51,20 +51,28 @@ export async function latestForChannel(channel: Channel): Promise<{ version: str
   const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=30`, { headers: GH_HEADERS });
   if (!res.ok) throw new Error(`GitHub API returned ${res.status} ${res.statusText}`);
   const releases = (await res.json()) as Release[];
-  const nightly = releases.find(r => r.prerelease);
+  // GitHub's /releases list is NOT reliably newest-first, so pick the highest
+  // version rather than the first prerelease in the list.
+  const nightly = releases
+    .filter(r => r.prerelease)
+    .sort((a, b) => compareVersions(b.tag_name.replace(/^v/, ''), a.tag_name.replace(/^v/, '')))[0];
   if (!nightly) throw new Error('No nightly (prerelease) build found yet.');
   return { version: nightly.tag_name.replace(/^v/, ''), tag: nightly.tag_name };
 }
 
-// 1 if a > b, -1 if a < b, 0 if equal (semver major.minor.patch)
+// Compare versions incl. `-nightly.N` prereleases: 1 if a > b, -1 if a < b, else 0.
+// A stable X.Y.Z outranks any X.Y.Z-nightly.N.
 export function compareVersions(a: string, b: string): number {
-  const pa = a.split('.').map(Number);
-  const pb = b.split('.').map(Number);
-  for (let i = 0; i < 3; i++) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
-    if (x > y) return 1;
-    if (x < y) return -1;
+  const parts = (v: string): number[] => {
+    const m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-nightly\.(\d+))?$/);
+    if (!m) return [0, 0, 0, 0];
+    return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Number.MAX_SAFE_INTEGER : Number(m[4])];
+  };
+  const pa = parts(a);
+  const pb = parts(b);
+  for (let i = 0; i < 4; i++) {
+    if (pa[i] > pb[i]) return 1;
+    if (pa[i] < pb[i]) return -1;
   }
   return 0;
 }
