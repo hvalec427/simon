@@ -1,10 +1,16 @@
 import chalk from 'chalk';
+import { selectWithExit } from './prompt.js';
 
 interface RnTarget {
   webSocketDebuggerUrl?: string;
   title?: string;
   description?: string;
   deviceName?: string;
+}
+
+function targetLabel(t: RnTarget): string {
+  const title = t.title || t.description || 'app';
+  return t.deviceName ? `${title}  ${chalk.gray(t.deviceName)}` : title;
 }
 
 interface RemoteObject {
@@ -74,7 +80,7 @@ function handleCdp(msg: { method?: string; params?: any }): void {
   }
 }
 
-export async function streamReactNativeLogs(port: number): Promise<void> {
+export async function streamReactNativeLogs(port: number, nameFilter?: string): Promise<void> {
   if (typeof WebSocket === 'undefined') {
     throw new Error('This build of Node has no WebSocket support — update simon (or Node ≥ 22.4).');
   }
@@ -92,12 +98,29 @@ export async function streamReactNativeLogs(port: number): Promise<void> {
     );
   }
 
-  const target = targets.find(t => t.webSocketDebuggerUrl);
-  if (!target?.webSocketDebuggerUrl) {
+  let debuggable = targets.filter(t => t.webSocketDebuggerUrl);
+  if (nameFilter) {
+    const n = nameFilter.toLowerCase();
+    const matched = debuggable.filter(
+      t => (t.deviceName ?? '').toLowerCase().includes(n) || (t.title ?? '').toLowerCase().includes(n),
+    );
+    if (matched.length) debuggable = matched;
+  }
+
+  if (debuggable.length === 0) {
     throw new Error('No debuggable React Native target found — is the app running in dev mode and connected to Metro?');
   }
 
-  const ws = new WebSocket(target.webSocketDebuggerUrl);
+  // Multiple devices/simulators on one Metro → let the user pick (auto if one).
+  const target =
+    debuggable.length === 1
+      ? debuggable[0]
+      : await selectWithExit(
+          'Select a React Native target:',
+          debuggable.map(t => ({ name: targetLabel(t), value: t })),
+        );
+
+  const ws = new WebSocket(target.webSocketDebuggerUrl!);
   let id = 1;
   const send = (method: string, params?: object) => ws.send(JSON.stringify({ id: id++, method, params }));
 

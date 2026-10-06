@@ -51,7 +51,7 @@ export async function logsCommand(options: LogsOptions): Promise<void> {
 
   try {
     if (options.rn) {
-      await streamReactNativeLogs(options.port ? Number(options.port) : 8081);
+      await streamReactNativeLogs(options.port ? Number(options.port) : 8081, name);
       return;
     }
 
