@@ -133,6 +133,7 @@ program
   .description('Update simon to the latest version (remembers --stable/--nightly channel)')
   .option('--nightly', 'Switch to and update from the nightly (develop) channel')
   .option('--stable', 'Switch to and update from the stable (master) channel')
+  .option('--force', 'Install the channel\'s latest even if it is the same or an older version')
   .action(updateCommand);
 
 program
