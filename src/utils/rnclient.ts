@@ -231,6 +231,7 @@ export class RnClient extends EventEmitter {
     if (c.ws) {
       try {
         c.ws.removeAllListeners();
+        c.ws.on('error', () => {}); // swallow the late abort error when closing while still connecting
         c.ws.close();
       } catch {
         /* ignore */
