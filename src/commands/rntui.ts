@@ -292,7 +292,7 @@ export function renderFrame(s: FrameState): string {
   else
     foot =
       ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search${s.search ? ' · n/N' : ''} · f filter · ⏎ preview · z max · y copy` +
-      (isLogs ? '' : ' · e errors · m method') +
+      (isLogs ? '' : ` · e errors:${s.errorsOnly ? 'on' : 'off'} · m method:${s.method}`) +
       ` · space/a scroll:${s.follow ? 'on' : 'off'} · g/G · c clear · R reload · r reconnect · p restart · q quit`;
 
   const lines: string[] = [bar(pad(head, cols))];
@@ -404,7 +404,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let errorsOnly = false;
   let method = 'ALL';
   let flash: string | undefined;
-  const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
+  const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
   const EMPTY: Device = { logs: [], net: [], status: 'connecting', wasDisconnected: false };
 
   function dev(key: string): Device {

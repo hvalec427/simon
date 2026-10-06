@@ -42,8 +42,10 @@ Keys drive the list:
 | `R` | reload the app |
 | `r` | reconnect |
 | `q` | quit |
-| `e` | *(Network)* toggle errors-only (4xx/5xx) |
-| `m` | *(Network)* cycle the HTTP-method filter |
+| `e` | *(Network)* toggle errors-only (4xx/5xx) — footer shows `errors:on/off` |
+| `m` | *(Network)* cycle the HTTP-method filter (ALL → GET → POST → PUT → PATCH → DELETE → HEAD → OPTIONS) — footer shows `method:<current>` |
+
+`HEAD` and `OPTIONS` are standard HTTP methods you'll see in real traffic (`HEAD` fetches only headers, no body; `OPTIONS` is a CORS/preflight probe). The active `e`/`m` filters also appear in the header bar (e.g. `errors+POST`).
 
 **`⏎`** opens a **side-by-side detail pane** for the selected row (list left, details right). `j`/`k` still move the list and the pane follows; `J`/`K` scroll the pane; `⏎`/`esc` closes.
 
