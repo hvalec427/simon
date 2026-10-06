@@ -14,16 +14,36 @@ interface RnTarget {
   deviceName?: string;
 }
 
+interface PreviewProp {
+  name: string;
+  value?: string;
+  type?: string;
+}
+interface ObjectPreview {
+  subtype?: string;
+  properties?: PreviewProp[];
+  overflow?: boolean;
+}
 interface RemoteObject {
   type?: string;
+  subtype?: string;
   value?: unknown;
   description?: string;
   unserializableValue?: string;
+  preview?: ObjectPreview;
+}
+
+function previewToString(p: ObjectPreview): string {
+  const parts = (p.properties ?? []).map(pr => (p.subtype === 'array' ? `${pr.value}` : `${pr.name}: ${pr.value}`));
+  if (p.overflow) parts.push('…');
+  return p.subtype === 'array' ? `[${parts.join(', ')}]` : `{ ${parts.join(', ')} }`;
 }
 
 function renderArg(a: RemoteObject): string {
   if (a == null) return '';
   if (a.value !== undefined) return typeof a.value === 'string' ? a.value : JSON.stringify(a.value);
+  // Objects/arrays aren't serialized by value over CDP — use the preview.
+  if (a.preview) return previewToString(a.preview);
   if (a.description) return a.description;
   if (a.unserializableValue) return a.unserializableValue;
   return a.type ?? '';
@@ -96,6 +116,7 @@ export class RnClient extends EventEmitter {
   private selectedKey?: string;
   private netRecords = new Map<string, NetRecord>();
   private cmdSeq = 1000;
+  private connected = false;
 
   constructor(private port: number, private nameFilter?: string, private retryMs = 2000) {
     super();
@@ -107,7 +128,7 @@ export class RnClient extends EventEmitter {
     if (!t) return;
     this.selectedKey = t.key;
     this.netRecords.clear();
-    this.reconnectNow();
+    this.reconnectNow(true);
   }
 
   // Clear persists across reconnects only if the device forgets its console
@@ -139,7 +160,10 @@ export class RnClient extends EventEmitter {
     this.connect();
   }
 
-  reconnectNow(): void {
+  // `force` reconnects even when already connected (used for device switches);
+  // the manual reconnect key is a no-op while the connection is live.
+  reconnectNow(force = false): void {
+    if (this.connected && !force) return;
     this.teardown();
     this.connect();
   }
@@ -150,6 +174,7 @@ export class RnClient extends EventEmitter {
   }
 
   private teardown(): void {
+    this.connected = false;
     if (this.timer) clearTimeout(this.timer);
     if (this.ws) {
       try {
@@ -245,6 +270,7 @@ export class RnClient extends EventEmitter {
     };
 
     ws.on('open', () => {
+      this.connected = true;
       send('Runtime.enable');
       send('Log.enable');
       send('Network.enable');
@@ -287,6 +313,7 @@ export class RnClient extends EventEmitter {
       if (entry) this.emit('log', entry);
     });
     ws.on('close', () => {
+      this.connected = false;
       if (!this.stopped) this.retryLater();
     });
     ws.on('error', () => {

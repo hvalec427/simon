@@ -61,6 +61,18 @@ describe('toEntry', () => {
   it('ignores unrelated methods', () => {
     expect(toEntry({ method: 'Debugger.paused' })).toBeNull();
   });
+
+  it('renders object args from their CDP preview', () => {
+    const e = toEntry({
+      method: 'Runtime.consoleAPICalled',
+      params: {
+        type: 'log',
+        args: [{ type: 'object', preview: { properties: [{ name: 'user', value: 'ziga' }, { name: 'n', value: '2' }] } }],
+      },
+    });
+    expect(e?.text).toContain('user: ziga');
+    expect(e?.text).toContain('n: 2');
+  });
 });
 
 function frame(partial: Partial<FrameState>): string {

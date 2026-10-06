@@ -213,7 +213,7 @@ export function renderFrame(s: FrameState): string {
       }
       const rawText = isLogs ? (item as LogEntry).text : netSummary(item as NetRecord).text;
       const text = pad(oneLine(rawText).slice(0, cols), cols);
-      if (!s.follow && idx === effSel) {
+      if (idx === effSel) {
         body.push(chalk.inverse(text));
       } else if (isLogs) {
         body.push(levelColor(item as LogEntry)(highlight(text, s.search)));
