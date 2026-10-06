@@ -1,3 +1,10 @@
+## [2.8.2](https://github.com/hvalec427/simon/compare/v2.8.1...v2.8.2) (2026-10-06)
+
+
+### Bug Fixes
+
+* simplify push real-device message to one line ([e100c69](https://github.com/hvalec427/simon/commit/e100c699886ee969b3f3ebc6116726217e568b75))
+
 ## [2.8.1](https://github.com/hvalec427/simon/compare/v2.8.0...v2.8.1) (2026-10-06)
 
 
