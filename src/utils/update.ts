@@ -65,6 +65,21 @@ export async function latestForChannel(channel: Channel): Promise<{ version: str
   return { version: nightly.tag_name.replace(/^v/, ''), tag: nightly.tag_name };
 }
 
+// Release notes (markdown body) for a tag, with the per-build "Install this
+// build" section trimmed off (not useful mid-update). Returns undefined on any
+// failure — notes are a nicety, never block an update on them.
+export async function fetchReleaseNotes(tag: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${tag}`, { headers: GH_HEADERS });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { body?: string };
+    const body = (data.body ?? '').split(/\n#+\s*Install this build/i)[0].trim();
+    return body || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 // Compare versions incl. `-nightly.N` prereleases: 1 if a > b, -1 if a < b, else 0.
 // A stable X.Y.Z outranks any X.Y.Z-nightly.N.
 export function compareVersions(a: string, b: string): number {

@@ -3,7 +3,7 @@ import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import path from 'path';
 import { execSync } from 'child_process';
-import { compareVersions, installTarget, latestForChannel, needsSudo } from '../src/utils/update';
+import { compareVersions, fetchReleaseNotes, installTarget, latestForChannel, needsSudo } from '../src/utils/update';
 
 vi.mock('child_process', () => ({ execSync: vi.fn(() => '') }));
 
@@ -67,6 +67,24 @@ describe('latestForChannel', () => {
   it('throws when no nightly exists', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [{ tag_name: 'v2.2.0', prerelease: false }] })));
     await expect(latestForChannel('nightly')).rejects.toThrow();
+  });
+});
+
+describe('fetchReleaseNotes', () => {
+  it('returns the body with the "Install this build" section stripped', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({ body: '### Features\n- a thing\n\n### Install this build\n```sh\ncurl ...\n```\n' }),
+      })),
+    );
+    expect(await fetchReleaseNotes('v1.0.0')).toBe('### Features\n- a thing');
+  });
+
+  it('returns undefined when the request fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
+    expect(await fetchReleaseNotes('v1.0.0')).toBeUndefined();
   });
 });
 

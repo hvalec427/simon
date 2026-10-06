@@ -4,6 +4,7 @@ import {
   Channel,
   currentVersion,
   downloadBinary,
+  fetchReleaseNotes,
   installBinary,
   installTarget,
   latestForChannel,
@@ -56,6 +57,14 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
   }
 
   console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
+
+  const notes = await fetchReleaseNotes(latest.tag);
+  if (notes) {
+    console.log();
+    console.log(chalk.bold("What's new:"));
+    console.log(chalk.gray(notes));
+    console.log();
+  }
 
   const stopDl = spinner('Downloading...');
   let tmp: string;
