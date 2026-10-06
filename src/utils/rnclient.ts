@@ -40,6 +40,8 @@ interface PreviewProp {
   name: string;
   value?: string;
   type?: string;
+  subtype?: string;
+  valuePreview?: ObjectPreview; // nested preview the runtime already sent (free)
 }
 interface ObjectPreview {
   subtype?: string;
@@ -64,7 +66,9 @@ function remoteValue(v: RemoteObject): string {
 }
 
 function previewToString(p: ObjectPreview): string {
-  const parts = (p.properties ?? []).map(pr => (p.subtype === 'array' ? `${pr.value}` : `${pr.name}: ${pr.value}`));
+  const valueOf = (pr: PreviewProp): string =>
+    pr.valuePreview ? previewToString(pr.valuePreview) : pr.value ?? pr.type ?? '';
+  const parts = (p.properties ?? []).map(pr => (p.subtype === 'array' ? valueOf(pr) : `${pr.name}: ${valueOf(pr)}`));
   if (p.overflow) parts.push('…');
   return p.subtype === 'array' ? `[${parts.join(', ')}]` : `{ ${parts.join(', ')} }`;
 }

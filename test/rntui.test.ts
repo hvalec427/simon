@@ -71,6 +71,28 @@ describe('toEntry', () => {
     expect(e?.text).toContain('user: ziga');
     expect(e?.text).toContain('n: 2');
   });
+
+  it('expands one nested level from the free valuePreview', () => {
+    const e = toEntry({
+      method: 'Runtime.consoleAPICalled',
+      params: {
+        type: 'log',
+        args: [
+          {
+            type: 'object',
+            preview: {
+              properties: [
+                { name: 'id', value: '7' },
+                { name: 'user', type: 'object', valuePreview: { properties: [{ name: 'name', value: 'ziga' }] } },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    expect(e?.text).toContain('id: 7');
+    expect(e?.text).toContain('user: { name: ziga }'); // nested, no extra CDP call
+  });
 });
 
 function frame(partial: Partial<FrameState>): string {
