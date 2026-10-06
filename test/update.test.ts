@@ -28,6 +28,11 @@ describe('compareVersions', () => {
   it('ranks a stable release above its nightlies', () => {
     expect(compareVersions('2.13.0', '2.13.0-nightly.12')).toBe(1);
   });
+
+  it('orders timestamp-based nightlies correctly', () => {
+    expect(compareVersions('2.15.0-nightly.20261006120500', '2.15.0-nightly.20261006115900')).toBe(1);
+    expect(compareVersions('2.15.0-nightly.20261006120500', '2.14.0')).toBe(1); // nightly ahead of stable base
+  });
 });
 
 describe('latestForChannel', () => {

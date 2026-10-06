@@ -45,12 +45,20 @@ jobs:
       - name: Test
         run: npm test
 
-      # semantic-release records releases as git notes; without the existing
-      # notes ref its push fails ("fatal error in commit_refs"). Fetch it first.
+      # develop → timestamped nightly prerelease (custom; no semantic-release notes).
+      - name: Nightly release
+        if: github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/nightly-release.sh
+
+      # master → stable release via semantic-release.
       - name: Fetch git notes
+        if: github.ref == 'refs/heads/master'
         run: git fetch origin "+refs/notes/*:refs/notes/*" || true
 
-      - name: Release
+      - name: Stable release
+        if: github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release
