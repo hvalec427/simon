@@ -1,6 +1,16 @@
 import readline from 'readline';
+import { spawnSync } from 'child_process';
 import chalk from 'chalk';
 import { LogEntry, NetRecord, RnClient, Status, TargetInfo } from '../utils/rnclient.js';
+
+function pbcopy(text: string): boolean {
+  try {
+    const r = spawnSync('pbcopy', { input: text });
+    return r.status === 0;
+  } catch {
+    return false;
+  }
+}
 
 const MAX_LINES = 5000;
 const MAX_NET = 1000;
@@ -47,14 +57,36 @@ export function graphqlOperation(rec: NetRecord): string | undefined {
   return pick(body);
 }
 
+function fmtDuration(ms?: number): string {
+  if (ms === undefined) return '';
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${Math.round(ms)}ms`;
+}
+
 export function netSummary(rec: NetRecord): { text: string; error: boolean; pending: boolean } {
   const pending = rec.status === undefined;
   const op = graphqlOperation(rec);
+  const dur = fmtDuration(rec.durationMs);
   return {
-    text: `${pending ? '···' : rec.status}  ${rec.method} ${rec.url}${op ? `  ${op}` : ''}`,
+    text: `${pending ? '···' : rec.status}  ${rec.method} ${rec.url}${dur ? `  ${dur}` : ''}${op ? `  ${op}` : ''}`,
     error: typeof rec.status === 'number' && rec.status >= 400,
     pending,
   };
+}
+
+// Network list with text + status-class + method filters applied.
+export function netView(records: NetRecord[], filter: string, errorsOnly: boolean, method: string): NetRecord[] {
+  let out = filterRecords(records, filter);
+  if (errorsOnly) out = out.filter(r => typeof r.status === 'number' && r.status >= 400);
+  if (method !== 'ALL') out = out.filter(r => r.method.toUpperCase() === method);
+  return out;
+}
+
+// A copy-pasteable curl command for a captured request.
+export function toCurl(rec: NetRecord): string {
+  const parts = [`curl -X ${rec.method} ${JSON.stringify(rec.url)}`];
+  for (const [k, v] of Object.entries(rec.reqHeaders ?? {})) parts.push(`-H ${JSON.stringify(`${k}: ${v}`)}`);
+  if (rec.reqBody) parts.push(`--data ${JSON.stringify(rec.reqBody)}`);
+  return parts.join(' \\\n  ');
 }
 
 function headerLines(h?: Record<string, string>): string[] {
@@ -78,7 +110,7 @@ export function netDetailLines(rec: NetRecord): string[] {
   const op = graphqlOperation(rec);
   return [
     `${rec.method} ${rec.url}`,
-    `Status: ${rec.status ?? '(pending)'}${rec.mimeType ? `  ·  ${rec.mimeType}` : ''}`,
+    `Status: ${rec.status ?? '(pending)'}${rec.durationMs !== undefined ? `  ·  ${fmtDuration(rec.durationMs)}` : ''}${rec.mimeType ? `  ·  ${rec.mimeType}` : ''}`,
     ...(op ? [`GraphQL: ${op}`] : []),
     '',
     '── Request headers ──',
@@ -212,6 +244,9 @@ export interface FrameState {
   who: string;
   networkSupported?: boolean;
   targets: TargetInfo[];
+  errorsOnly: boolean;
+  method: string; // 'ALL' | 'GET' | 'POST' | ...
+  flash?: string; // transient one-shot status (e.g. "copied")
 }
 
 export function renderFrame(s: FrameState): string {
@@ -227,15 +262,21 @@ export function renderFrame(s: FrameState): string {
   }).join(' ');
 
   const restart = `${s.clearOnRestart ? 'clears' : 'keeps'} logs on restart`;
-  const head = ` ${s.who || '…'} · ${s.status}${s.filter ? ` · filter:"${s.filter}"` : ''} · ${restart}   ${tabBar}`;
+  const netFilters =
+    !isLogs && (s.errorsOnly || s.method !== 'ALL')
+      ? ` · ${[s.errorsOnly ? 'errors' : '', s.method !== 'ALL' ? s.method : ''].filter(Boolean).join('+')}`
+      : '';
+  const head = ` ${s.who || '…'} · ${s.status}${s.filter ? ` · filter:"${s.filter}"` : ''}${netFilters} · ${restart}   ${tabBar}`;
 
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
-  else if (s.detail) foot = ` ⏎/esc close · ↑↓/jk scroll · g/G top/bottom · / search${s.search ? ' · n/N' : ''} · q quit`;
+  else if (s.flash) foot = ` ${s.flash}`;
+  else if (s.detail) foot = ` ⏎/esc close · ↑↓/jk scroll · g/G top/bottom · / search${s.search ? ' · n/N' : ''} · y copy · q quit`;
   else
     foot =
-      ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand` +
-      ` · a autoscroll:${s.follow ? 'on' : 'off'} · g/G scroll · c clear · R reload · r reconnect · p restart · q quit`;
+      ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search · f filter${s.search ? ' · n/N' : ''} · ⏎ expand · y copy` +
+      (isLogs ? '' : ' · C curl · e errors · m method') +
+      ` · space/a scroll:${s.follow ? 'on' : 'off'} · g/G · c clear · R reload · r reconnect · p restart · q quit`;
 
   const lines: string[] = [bar(pad(head, cols))];
   if (hasDeviceBar) {
@@ -246,7 +287,9 @@ export function renderFrame(s: FrameState): string {
   }
 
   const body: string[] = [];
-  const items: (LogEntry | NetRecord)[] = isLogs ? filterEntries(s.buffers.logs, s.filter) : filterRecords(s.netRecords, s.filter);
+  const items: (LogEntry | NetRecord)[] = isLogs
+    ? filterEntries(s.buffers.logs, s.filter)
+    : netView(s.netRecords, s.filter, s.errorsOnly, s.method);
   const len = items.length;
   const effSel = s.follow ? len - 1 : clamp(s.sel, 0, Math.max(0, len - 1));
 
@@ -304,6 +347,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let follow = true;
   let detail = false;
   let detailScroll = 0;
+  let detailHit = -1; // last search-matched detail line (for n/N + context offset)
   let detailLines: string[] | null = null;
   let detailLoading = false;
   let detailToken = 0; // invalidates in-flight object fetches when the view changes
@@ -314,6 +358,10 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let input = '';
   let clearOnRestart = false;
   let targets: TargetInfo[] = [];
+  let errorsOnly = false;
+  let method = 'ALL';
+  let flash: string | undefined;
+  const METHODS = ['ALL', 'GET', 'POST', 'PUT', 'PATCH', 'DELETE'];
   const EMPTY: Device = { logs: [], net: [], status: 'connecting', wasDisconnected: false };
 
   function dev(key: string): Device {
@@ -380,7 +428,8 @@ export function runRnTui(port: number, nameFilter?: string): void {
   });
 
   const height = () => frameHeight(process.stdout.rows ?? 24, targets.length > 1);
-  const items = () => (tab === 'logs' ? filterEntries(active().logs, filter) : filterRecords(active().net, filter));
+  const items = () =>
+    tab === 'logs' ? filterEntries(active().logs, filter) : netView(active().net, filter, errorsOnly, method);
   const count = () => items().length;
 
   function render(): void {
@@ -407,6 +456,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
         who: activeKey ?? '',
         networkSupported: d.networkSupported,
         targets,
+        errorsOnly,
+        method,
+        flash,
       }),
     );
   }
@@ -422,6 +474,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     detail = false;
     detailLines = null;
     detailLoading = false;
+    detailHit = -1;
     detailToken++; // cancel any in-flight fetch
   }
 
@@ -442,32 +495,101 @@ export function runRnTui(port: number, nameFilter?: string): void {
     );
   }
 
-  // Scroll to the next/previous detail line matching the search term.
+  const CONTEXT = 3; // lines of context to keep above a jumped-to match
+
+  // Scroll to the next/previous detail line matching the search term, keeping a
+  // few lines of context above it.
   function jumpDetail(dir: 1 | -1): void {
     if (!search) return;
     const dl = detailLinesNow();
     const t = search.toLowerCase();
     const hits = dl.flatMap((l, i) => (l.toLowerCase().includes(t) ? [i] : []));
     if (!hits.length) return;
-    let next = dir === 1 ? hits.find(i => i > detailScroll) : [...hits].reverse().find(i => i < detailScroll);
+    const base = detailHit >= 0 ? detailHit : detailScroll;
+    let next = dir === 1 ? hits.find(i => i > base) : [...hits].reverse().find(i => i < base);
     if (next === undefined) next = dir === 1 ? hits[0] : hits[hits.length - 1];
-    detailScroll = next;
+    detailHit = next;
+    detailScroll = Math.max(0, next - CONTEXT);
   }
 
-  function jump(dir: 1 | -1): void {
-    if (!search) return;
+  const matchIndexes = (): number[] => {
     const t = search.toLowerCase();
-    const list = items();
-    const hits = list.flatMap((it, i) => {
+    return items().flatMap((it, i) => {
       const text = tab === 'logs' ? (it as LogEntry).text : `${(it as NetRecord).method} ${(it as NetRecord).url}`;
       return text.toLowerCase().includes(t) ? [i] : [];
     });
+  };
+
+  function jump(dir: 1 | -1): void {
+    if (!search) return;
+    const hits = matchIndexes();
     if (!hits.length) return;
-    const base = follow ? list.length - 1 : sel[tab];
+    const base = follow ? count() - 1 : sel[tab];
     let next = dir === 1 ? hits.find(i => i > base) : [...hits].reverse().find(i => i < base);
     if (next === undefined) next = dir === 1 ? hits[0] : hits[hits.length - 1];
     follow = false;
     sel[tab] = next;
+  }
+
+  // Live-follow the first match at/after the cursor as the search term is typed.
+  function jumpFirst(): void {
+    if (!search) return;
+    if (detail) {
+      const dl = detailLinesNow();
+      const t = search.toLowerCase();
+      const from = detailHit >= 0 ? detailHit : detailScroll;
+      const hits = dl.flatMap((l, i) => (l.toLowerCase().includes(t) ? [i] : []));
+      if (!hits.length) return;
+      const next = hits.find(i => i >= from) ?? hits[0];
+      detailHit = next;
+      detailScroll = Math.max(0, next - CONTEXT);
+      return;
+    }
+    const hits = matchIndexes();
+    if (!hits.length) return;
+    const base = follow ? 0 : sel[tab];
+    follow = false;
+    sel[tab] = hits.find(i => i >= base) ?? hits[0];
+  }
+
+  // Copy the selected row: a log (its text, plus the deep object tree if any)
+  // or a network request (full detail — headers + bodies).
+  function copySelection(): void {
+    const list = items();
+    if (!list.length) return;
+    const effSel = follow ? list.length - 1 : Math.min(sel[tab], list.length - 1);
+    const it = list[effSel];
+    if (tab === 'logs') {
+      const e = it as LogEntry;
+      if (activeKey && e.argObjectIds?.length) {
+        client
+          .getObjectTree(activeKey, e.argObjectIds)
+          .then(tree => setFlash(copyText([e.text, '', ...tree].join('\n'))))
+          .catch(() => setFlash('copy failed'));
+        setFlash('copying…');
+      } else {
+        setFlash(copyText(logDetailLines(e).join('\n')));
+      }
+    } else {
+      setFlash(copyText(netDetailLines(it as NetRecord).join('\n')));
+    }
+  }
+
+  function copyCurl(): void {
+    if (tab !== 'network') return;
+    const list = items();
+    if (!list.length) return;
+    const effSel = follow ? list.length - 1 : Math.min(sel[tab], list.length - 1);
+    setFlash(copyText(toCurl(list[effSel] as NetRecord), 'copied curl'));
+  }
+
+  function copyText(text: string, label = 'copied'): string {
+    return pbcopy(text) ? `${label} (${text.length} chars)` : 'copy failed (pbcopy unavailable)';
+  }
+
+  function setFlash(msg: string): void {
+    flash = msg;
+    render();
   }
 
   function onKey(str: string | undefined, key: { name?: string; ctrl?: boolean }): void {
@@ -481,15 +603,23 @@ export function runRnTui(port: number, nameFilter?: string): void {
       } else if (key.name === 'backspace') {
         input = input.slice(0, -1);
         if (mode === 'filter') filter = input;
-        else search = input;
+        else {
+          search = input;
+          jumpFirst();
+        }
       } else if (str && !key.ctrl) {
         input += str;
         if (mode === 'filter') filter = input;
-        else search = input;
+        else {
+          search = input;
+          jumpFirst();
+        }
       }
       render();
       return;
     }
+
+    flash = undefined; // any normal-mode key dismisses a transient status
 
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
 
@@ -506,14 +636,18 @@ export function runRnTui(port: number, nameFilter?: string): void {
       } else if (str === '/') {
         mode = 'search';
         input = search;
-      } else if (str === 'n') jumpDetail(1);
+      } else if (str === 'y') return copySelection();
+      else if (str === 'n') jumpDetail(1);
       else if (str === 'N') jumpDetail(-1);
-      else if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
-      else if (key.name === 'down' || str === 'j') detailScroll = Math.min(max, detailScroll + 1);
-      else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - h);
-      else if (key.name === 'pagedown') detailScroll = Math.min(max, detailScroll + h);
-      else if (str === 'g') detailScroll = 0;
-      else if (str === 'G') detailScroll = max;
+      else {
+        if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
+        else if (key.name === 'down' || str === 'j') detailScroll = Math.min(max, detailScroll + 1);
+        else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - h);
+        else if (key.name === 'pagedown') detailScroll = Math.min(max, detailScroll + h);
+        else if (str === 'g') detailScroll = 0;
+        else if (str === 'G') detailScroll = max;
+        detailHit = -1; // manual scroll — n/N should resume from here
+      }
       render();
       return;
     }
@@ -547,7 +681,11 @@ export function runRnTui(port: number, nameFilter?: string): void {
       active().net.length = 0;
       if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
-    else if (str === 'a') {
+    else if (str === 'y') return copySelection();
+    else if (str === 'C') return copyCurl();
+    else if (str === 'e' && tab === 'network') errorsOnly = !errorsOnly;
+    else if (str === 'm' && tab === 'network') method = METHODS[(METHODS.indexOf(method) + 1) % METHODS.length];
+    else if (str === 'a' || key.name === 'space') {
       follow = !follow;
       if (follow) sel[tab] = Math.max(0, n - 1);
     } else if (str && /^[1-9]$/.test(str)) {
@@ -564,6 +702,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
       if (n > 0) {
         detail = true;
         detailScroll = 0;
+        detailHit = -1;
         detailLines = null;
         detailLoading = false;
         const effSel = follow ? n - 1 : Math.min(sel[tab], n - 1);

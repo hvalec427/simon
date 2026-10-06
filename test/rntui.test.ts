@@ -10,7 +10,9 @@ import {
   logDetailLines,
   netDetailLines,
   netSummary,
+  netView,
   renderFrame,
+  toCurl,
 } from '../src/commands/rntui';
 import { toEntry } from '../src/utils/rnclient';
 import type { LogEntry, NetRecord } from '../src/utils/rnclient';
@@ -91,6 +93,8 @@ function frame(partial: Partial<FrameState>): string {
     who: 'iPhone',
     networkSupported: true,
     targets: [],
+    errorsOnly: false,
+    method: 'ALL',
     ...partial,
   });
 }
@@ -214,6 +218,44 @@ describe('netSummary', () => {
   });
   it('marks pending when there is no status yet', () => {
     expect(netSummary({ id: '2', method: 'GET', url: 'u' }).pending).toBe(true);
+  });
+  it('shows request duration when known (ms and s)', () => {
+    expect(netSummary({ id: '3', method: 'GET', url: 'u', status: 200, durationMs: 123 }).text).toContain('123ms');
+    expect(netSummary({ id: '4', method: 'GET', url: 'u', status: 200, durationMs: 1500 }).text).toContain('1.5s');
+  });
+});
+
+describe('netView', () => {
+  const recs: NetRecord[] = [
+    { id: '1', method: 'GET', url: 'https://api/a', status: 200 },
+    { id: '2', method: 'POST', url: 'https://api/b', status: 500 },
+    { id: '3', method: 'POST', url: 'https://api/c', status: 404 },
+  ];
+  it('filters by errors-only (status >= 400)', () => {
+    expect(netView(recs, '', true, 'ALL').map(r => r.id)).toEqual(['2', '3']);
+  });
+  it('filters by HTTP method', () => {
+    expect(netView(recs, '', false, 'POST').map(r => r.id)).toEqual(['2', '3']);
+    expect(netView(recs, '', false, 'GET').map(r => r.id)).toEqual(['1']);
+  });
+  it('combines text, errors and method filters', () => {
+    expect(netView(recs, 'api', true, 'POST').map(r => r.id)).toEqual(['2', '3']);
+    expect(netView(recs, 'a', true, 'GET')).toEqual([]); // GET /a is 200, excluded by errors-only
+  });
+});
+
+describe('toCurl', () => {
+  it('builds a curl command with method, headers and body', () => {
+    const out = toCurl({
+      id: '1',
+      method: 'POST',
+      url: 'https://api/x',
+      reqHeaders: { 'content-type': 'application/json' },
+      reqBody: '{"a":1}',
+    });
+    expect(out).toContain('curl -X POST "https://api/x"');
+    expect(out).toContain('-H "content-type: application/json"');
+    expect(out).toContain('--data "{\\"a\\":1}"');
   });
 });
 

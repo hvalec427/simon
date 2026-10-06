@@ -23,6 +23,8 @@ export interface NetRecord {
   reqBody?: string;
   resHeaders?: Record<string, string>;
   resBody?: string;
+  startTs?: number; // CDP monotonic timestamp (seconds) at request start
+  durationMs?: number; // request→finished, once known
 }
 
 export type Status = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
@@ -335,7 +337,14 @@ export class RnClient extends EventEmitter {
     const p = msg.params ?? {};
     if (msg.method === 'Network.requestWillBeSent') {
       const r = p.request ?? {};
-      const rec: NetRecord = { id: p.requestId, method: r.method ?? 'GET', url: r.url ?? '', reqHeaders: r.headers, reqBody: r.postData };
+      const rec: NetRecord = {
+        id: p.requestId,
+        method: r.method ?? 'GET',
+        url: r.url ?? '',
+        reqHeaders: r.headers,
+        reqBody: r.postData,
+        startTs: typeof p.timestamp === 'number' ? p.timestamp : undefined,
+      };
       conn.netRecords.set(p.requestId, rec);
       this.emit('net', key, rec);
     } else if (msg.method === 'Network.responseReceived') {
@@ -348,7 +357,14 @@ export class RnClient extends EventEmitter {
         this.emit('net', key, rec);
       }
     } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
-      if (conn.netRecords.has(p.requestId)) fetchBody(p.requestId);
+      const rec = conn.netRecords.get(p.requestId);
+      if (rec) {
+        if (rec.startTs !== undefined && typeof p.timestamp === 'number') {
+          rec.durationMs = Math.max(0, (p.timestamp - rec.startTs) * 1000);
+        }
+        this.emit('net', key, rec);
+        fetchBody(p.requestId);
+      }
     }
   }
 }
