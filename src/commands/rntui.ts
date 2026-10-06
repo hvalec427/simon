@@ -154,6 +154,8 @@ export interface FrameState {
   follow: boolean;
   detail: boolean;
   detailScroll: number;
+  detailLines?: string[] | null; // fetched deep-object tree (logs); overrides the default
+  detailLoading?: boolean;
   filter: string;
   search: string;
   mode: 'normal' | 'filter' | 'search';
@@ -205,7 +207,13 @@ export function renderFrame(s: FrameState): string {
     body.push(chalk.yellowBright(' Network isn’t exposed over CDP by this React Native version.'));
     while (body.length < h) body.push('');
   } else if (s.detail && len > 0) {
-    const raw = isLogs ? logDetailLines(items[effSel] as LogEntry) : netDetailLines(items[effSel] as NetRecord);
+    const raw = s.detailLoading
+      ? ['Fetching object…']
+      : s.detailLines && s.detailLines.length
+      ? s.detailLines
+      : isLogs
+      ? logDetailLines(items[effSel] as LogEntry)
+      : netDetailLines(items[effSel] as NetRecord);
     // Wrap long lines so everything is reachable by scrolling (nothing cut off).
     const dl = raw.flatMap(l => wrap(oneLine(l), cols));
     const start = clamp(s.detailScroll, 0, Math.max(0, dl.length - h));
@@ -257,6 +265,9 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let follow = true;
   let detail = false;
   let detailScroll = 0;
+  let detailLines: string[] | null = null;
+  let detailLoading = false;
+  let detailToken = 0; // invalidates in-flight object fetches when the view changes
   let tab: Tab = 'logs';
   let filter = '';
   let search = '';
@@ -346,6 +357,8 @@ export function runRnTui(port: number, nameFilter?: string): void {
         follow,
         detail,
         detailScroll,
+        detailLines,
+        detailLoading,
         filter,
         search,
         mode,
@@ -366,9 +379,16 @@ export function runRnTui(port: number, nameFilter?: string): void {
     process.exit(0);
   }
 
+  function closeDetail(): void {
+    detail = false;
+    detailLines = null;
+    detailLoading = false;
+    detailToken++; // cancel any in-flight fetch
+  }
+
   function switchTab(dir: 1 | -1): void {
     tab = TABS[(TABS.indexOf(tab) + dir + TABS.length) % TABS.length];
-    detail = false;
+    closeDetail();
   }
 
   function jump(dir: 1 | -1): void {
@@ -411,7 +431,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     if (key.name === 'q' || (key.ctrl && key.name === 'c')) return quit();
 
     if (detail) {
-      if (key.name === 'return' || key.name === 'escape') detail = false;
+      if (key.name === 'return' || key.name === 'escape') closeDetail();
       else if (key.name === 'up' || str === 'k') detailScroll = Math.max(0, detailScroll - 1);
       else if (key.name === 'down' || str === 'j') detailScroll += 1;
       else if (key.name === 'pageup') detailScroll = Math.max(0, detailScroll - height());
@@ -458,7 +478,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
       if (idx < targets.length) {
         // Instant view switch — the other device stays connected in the background.
         activeKey = targets[idx].key;
-        detail = false;
+        closeDetail();
       }
     } else if (str === 'r') client.reconnectNow();
     else if (str === 'R') {
@@ -467,6 +487,29 @@ export function runRnTui(port: number, nameFilter?: string): void {
       if (n > 0) {
         detail = true;
         detailScroll = 0;
+        detailLines = null;
+        detailLoading = false;
+        const effSel = follow ? n - 1 : Math.min(sel[tab], n - 1);
+        const it = items()[effSel] as LogEntry | undefined;
+        if (tab === 'logs' && activeKey && it?.argObjectIds?.length) {
+          detailLoading = true;
+          const token = ++detailToken;
+          client
+            .getObjectTree(activeKey, it.argObjectIds)
+            .then(tree => {
+              if (token === detailToken) {
+                detailLines = [it.text, '', ...tree];
+                detailLoading = false;
+                render();
+              }
+            })
+            .catch(() => {
+              if (token === detailToken) {
+                detailLoading = false;
+                render();
+              }
+            });
+        }
       }
     } else if (str === 'n') jump(1);
     else if (str === 'N') jump(-1);

@@ -52,6 +52,24 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: bash scripts/nightly-release.sh
 
+      # Rule: a stable release must only contain commits already shipped to a
+      # nightly — i.e. every new non-merge commit must be on develop.
+      - name: Enforce stable comes from develop
+        if: github.ref == 'refs/heads/master'
+        run: |
+          git fetch origin develop
+          PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-nightly' | head -1)
+          OFFENDERS=""
+          for c in $(git log ${PREV:+$PREV..}HEAD --no-merges --format=%H); do
+            git merge-base --is-ancestor "$c" origin/develop || OFFENDERS="${OFFENDERS}$(git log -1 --oneline "$c")\n"
+          done
+          if [ -n "$OFFENDERS" ]; then
+            echo "::error::Stable release has commits not on develop (not nightly-built):"
+            printf "%b" "$OFFENDERS"
+            exit 1
+          fi
+          echo "OK — all released commits are on develop."
+
       # master → stable release via semantic-release.
       - name: Fetch git notes
         if: github.ref == 'refs/heads/master'
