@@ -70,6 +70,7 @@ program
   .option('--app <name>', 'Show only this app\'s logs (process/app name; bundle id also works on iOS simulators)')
   .option('--rn', 'Stream React Native JS console + network from Metro (CDP), not device logs')
   .option('--port <port>', 'Metro port for --rn (default 8081)')
+  .option('--print-ws', 'Print the Metro inspector WebSocket URL(s) for --rn targets and exit (e.g. for nvim-dap)')
   .action(logsCommand);
 
 program

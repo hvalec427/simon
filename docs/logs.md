@@ -71,3 +71,15 @@ Keys drive the list:
 - **GraphQL** POSTs show their operation name right in the Network list (e.g. `200 POST …/graphql  GetOrders`), taken from `operationName` or the query. Requests also show their timing (e.g. `123ms`).
 
 It **auto-reconnects** on close/crash and honours the clear-on-restart toggle on fast-refresh.
+
+### Attaching an external debugger (`--print-ws`)
+
+simon doesn't do breakpoint debugging, but it can hand you the Metro inspector WebSocket URL so another tool (e.g. `nvim-dap` via `vscode-js-debug`'s *attach*) can connect:
+
+```sh
+simon logs --rn --print-ws                 # print URL(s) for every target
+simon logs --rn --print-ws "iPhone 16"     # just the matching target
+WS=$(simon logs --rn --print-ws)           # capture it for a debugger config
+```
+
+URLs go to stdout (so it's pipeable); when several targets match, each is labelled on stderr. The breakpoints/stepping themselves live in your editor's DAP setup — simon only points it at the right endpoint.

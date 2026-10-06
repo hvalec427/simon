@@ -113,6 +113,15 @@ export function toEntry(msg: { method?: string; params?: any }): LogEntry | null
 
 const keyOf = (t: RnTarget) => t.deviceName || t.title || 'app';
 
+// List Metro inspector targets (label + CDP WebSocket URL) — handy for pointing
+// an external debugger (e.g. nvim-dap's attach) at the right endpoint.
+export async function fetchInspectorTargets(port: number): Promise<{ label: string; url: string }[]> {
+  const res = await fetch(`http://localhost:${port}/json`);
+  if (!res.ok) throw new Error(`Metro inspector returned ${res.status} ${res.statusText}`);
+  const targets = (await res.json()) as RnTarget[];
+  return targets.filter(t => t.webSocketDebuggerUrl).map(t => ({ label: keyOf(t), url: t.webSocketDebuggerUrl! }));
+}
+
 interface Conn {
   key: string;
   ws?: WebSocket;
