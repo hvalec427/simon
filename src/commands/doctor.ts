@@ -3,7 +3,7 @@ import { execSync } from 'child_process';
 import { existsSync } from 'fs';
 import { findBin, getSdkRoot } from '../utils/android.js';
 import { spinner } from '../utils/prompt.js';
-import { compareVersions, currentVersion, latestRelease } from '../utils/update.js';
+import { currentVersion, latestForChannel, loadChannel } from '../utils/update.js';
 
 type Status = 'ok' | 'warn' | 'fail';
 interface Check {
@@ -69,15 +69,16 @@ function emulatorCheck(): Check {
 
 async function versionCheck(): Promise<Check> {
   const current = currentVersion();
+  const channel = loadChannel();
   try {
-    const { version } = await latestRelease();
+    const { version } = await latestForChannel(channel);
     if (current === 'unknown') {
-      return { status: 'warn', label: 'simon', detail: `latest is ${version} (local version unknown)` };
+      return { status: 'warn', label: 'simon', detail: `latest ${channel} is ${version} (local version unknown)` };
     }
-    if (compareVersions(version, current) > 0) {
-      return { status: 'warn', label: 'simon', detail: `${current} (latest ${version})`, fix: 'simon update' };
+    if (version !== current) {
+      return { status: 'warn', label: 'simon', detail: `${current} (latest ${channel} ${version})`, fix: 'simon update' };
     }
-    return { status: 'ok', label: 'simon', detail: `${current} (latest)` };
+    return { status: 'ok', label: 'simon', detail: `${current} (latest ${channel})` };
   } catch {
     return { status: 'warn', label: 'simon', detail: `${current} (couldn't reach GitHub to check)` };
   }

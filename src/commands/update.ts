@@ -1,20 +1,41 @@
 import chalk from 'chalk';
 import { spinner } from '../utils/prompt.js';
 import {
-  compareVersions,
+  Channel,
   currentVersion,
   downloadBinary,
   installBinary,
-  latestRelease,
+  latestForChannel,
+  loadChannel,
+  saveChannel,
 } from '../utils/update.js';
 
-export async function updateCommand(): Promise<void> {
+interface UpdateOptions {
+  nightly?: boolean;
+  stable?: boolean;
+}
+
+// A channel flag both selects and remembers the channel; otherwise use the saved one.
+function resolveChannel(options: UpdateOptions): Channel {
+  if (options.nightly) {
+    saveChannel('nightly');
+    return 'nightly';
+  }
+  if (options.stable) {
+    saveChannel('stable');
+    return 'stable';
+  }
+  return loadChannel();
+}
+
+export async function updateCommand(options: UpdateOptions): Promise<void> {
+  const channel = resolveChannel(options);
   const current = currentVersion();
 
-  const stop = spinner('Checking for updates...');
+  const stop = spinner(`Checking for ${channel} updates...`);
   let latest;
   try {
-    latest = await latestRelease();
+    latest = await latestForChannel(channel);
     stop();
   } catch (err) {
     stop();
@@ -22,12 +43,12 @@ export async function updateCommand(): Promise<void> {
     process.exit(1);
   }
 
-  if (current !== 'unknown' && compareVersions(latest.version, current) <= 0) {
-    console.log(chalk.green(`Already on the latest version (${current}).`));
+  if (current !== 'unknown' && current === latest.version) {
+    console.log(chalk.green(`Already on the latest ${channel} version (${current}).`));
     return;
   }
 
-  console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)}...`);
+  console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
 
   const stopDl = spinner('Downloading...');
   let tmp: string;
@@ -48,5 +69,5 @@ export async function updateCommand(): Promise<void> {
     process.exit(1);
   }
 
-  console.log(chalk.green(`Updated to ${latest.version}.`));
+  console.log(chalk.green(`Updated to ${latest.version} (${channel}).`));
 }

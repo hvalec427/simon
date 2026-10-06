@@ -122,11 +122,15 @@ program
 program
   .command('check-update')
   .description('Check whether a newer version of simon is available')
+  .option('--nightly', 'Check the nightly (develop) channel')
+  .option('--stable', 'Check the stable (master) channel')
   .action(checkUpdateCommand);
 
 program
   .command('update')
-  .description('Update simon to the latest version')
+  .description('Update simon to the latest version (remembers --stable/--nightly channel)')
+  .option('--nightly', 'Switch to and update from the nightly (develop) channel')
+  .option('--stable', 'Switch to and update from the stable (master) channel')
   .action(updateCommand);
 
 process.on('uncaughtException', err => {

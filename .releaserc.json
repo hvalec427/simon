@@ -1,9 +1,8 @@
 {
-  "branches": ["master"],
+  "branches": ["master", { "name": "develop", "prerelease": "nightly" }],
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
-    "@semantic-release/changelog",
     ["@semantic-release/npm", { "npmPublish": false }],
     [
       "@semantic-release/exec",
@@ -18,13 +17,6 @@
           { "path": "simon-darwin-arm64", "label": "simon-darwin-arm64" },
           { "path": "simon-darwin-x64", "label": "simon-darwin-x64" }
         ]
-      }
-    ],
-    [
-      "@semantic-release/git",
-      {
-        "assets": ["package.json", "package-lock.json", "CHANGELOG.md"],
-        "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ]
   ]

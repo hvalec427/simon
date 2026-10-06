@@ -3,7 +3,8 @@ name: Build & Release
 on:
   push:
     branches:
-      - master
+      - master   # stable releases
+      - develop  # nightly prereleases
 
 permissions:
   contents: write
