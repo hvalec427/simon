@@ -28,8 +28,64 @@ npm run bundle
 npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64
 npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
 
+# ── Release notes: a real changelog of everything since the previous nightly
+# (falling back to the latest stable), grouped like the stable releases, plus a
+# copy-paste install line for this exact build. Nightlies only.
+PREV=$(git tag -l 'v*-nightly.*' --sort=-creatordate | head -1)
+[ -z "${PREV}" ] && PREV="v${LATEST}"
+RANGE="${PREV}..HEAD"
+echo "Changelog range: ${RANGE}"
+
+NOTES=$(mktemp)
+{
+  echo "Automated nightly build from \`develop\`. Changes since \`${PREV}\`:"
+  echo
+
+  emit() {
+    local title="$1" pattern="$2"
+    local rows
+    rows=$(git log "${RANGE}" --no-merges --pretty=format:'%h%x09%s' \
+      | awk -F'\t' -v pat="${pattern}" '$2 ~ ("^" pat "(\\(|!?:)") {print}')
+    [ -z "${rows}" ] && return
+    echo "### ${title}"
+    echo
+    printf '%s\n' "${rows}" | while IFS=$'\t' read -r h s; do
+      clean=$(printf '%s' "${s}" | sed -E 's/^[a-z]+(\([^)]+\))?!?: //')
+      scope=$(printf '%s' "${s}" | sed -nE 's/^[a-z]+\(([^)]+)\)!?:.*/\1/p')
+      if [ -n "${scope}" ]; then
+        echo "- **${scope}:** ${clean} (${h})"
+      else
+        echo "- ${clean} (${h})"
+      fi
+    done
+    echo
+  }
+
+  emit "Features" "feat"
+  emit "Bug Fixes" "fix"
+  emit "Performance" "perf"
+
+  OTHER=$(git log "${RANGE}" --no-merges --pretty=format:'%h%x09%s' \
+    | awk -F'\t' '$2 !~ /^(feat|fix|perf)(\(|!?:)/ {print}')
+  if [ -n "${OTHER}" ]; then
+    echo "### Other"
+    echo
+    printf '%s\n' "${OTHER}" | while IFS=$'\t' read -r h s; do echo "- ${s} (${h})"; done
+    echo
+  fi
+
+  echo "### Install this build"
+  echo
+  echo '```sh'
+  echo "curl -fsSL https://github.com/${REPO}/releases/download/${TAG}/simon-darwin-arm64 -o simon \\"
+  echo "  && chmod +x simon && sudo mv simon /usr/local/bin/simon"
+  echo '```'
+  echo
+  echo "_Apple Silicon shown; on Intel use \`simon-darwin-x64\`. Already installed? \`simon update --nightly\`._"
+} > "${NOTES}"
+
 gh release create "${TAG}" \
   --prerelease \
   --title "${TAG}" \
-  --notes "Automated nightly build from develop." \
+  --notes-file "${NOTES}" \
   simon-darwin-arm64 simon-darwin-x64
