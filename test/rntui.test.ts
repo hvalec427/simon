@@ -249,7 +249,8 @@ describe('renderFrame', () => {
       follow: false,
     });
     expect(f).toContain('"user": "ziga"');
-    expect(f).toContain('restore'); // footer shows the restore toggle
+    expect(f).toContain('z split'); // footer shows the restore-to-split toggle
+    expect(f).toContain('jk/JK scroll'); // maximized: j/k drive the pane
     expect(f).not.toContain('│'); // list hidden → no column separator
   });
 

@@ -283,14 +283,16 @@ export function renderFrame(s: FrameState): string {
   let foot: string;
   if (s.mode !== 'normal') foot = `${s.mode}: ${s.input}▏`;
   else if (s.flash) foot = ` ${s.flash}`;
-  else if (s.detail)
+  else if (s.detail && s.maximized)
     foot =
-      ` ⏎/esc close · z ${s.maximized ? 'restore' : 'maximize'} · jk list · JK scroll · / search${s.search ? ' · n/N' : ''}` +
-      ` · y copy${isLogs ? '' : ' · c/C curl'} · q quit`;
+      ` ⏎/esc close · z split · jk/JK scroll · g/G · / search${s.search ? ' · n/N' : ''}` +
+      ` · y copy${isLogs ? '' : ' · c curl'} · q quit`;
+  else if (s.detail)
+    foot = ` ⏎/esc close · z max · jk list · JK scroll · / search${s.search ? ' · n/N' : ''} · y copy · c clear · q quit`;
   else
     foot =
       ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search${s.search ? ' · n/N' : ''} · f filter · ⏎ preview · z max · y copy` +
-      (isLogs ? '' : ' · C curl · e errors · m method') +
+      (isLogs ? '' : ' · e errors · m method') +
       ` · space/a scroll:${s.follow ? 'on' : 'off'} · g/G · c clear · R reload · r reconnect · p restart · q quit`;
 
   const lines: string[] = [bar(pad(head, cols))];
@@ -604,8 +606,10 @@ export function runRnTui(port: number, nameFilter?: string): void {
 
   const matchIndexes = (): number[] => {
     const t = search.toLowerCase();
+    // Match the exact text shown in the row (incl. status/duration/op) so n/N
+    // reaches every highlighted match.
     return items().flatMap((it, i) => {
-      const text = tab === 'logs' ? (it as LogEntry).text : `${(it as NetRecord).method} ${(it as NetRecord).url}`;
+      const text = tab === 'logs' ? (it as LogEntry).text : netSummary(it as NetRecord).text;
       return text.toLowerCase().includes(t) ? [i] : [];
     });
   };
@@ -621,11 +625,11 @@ export function runRnTui(port: number, nameFilter?: string): void {
     sel[tab] = next;
   }
 
-  // Live-follow the first match as the search term is typed — but only on the
-  // list. With the preview open, typing just updates highlights; use n/N to
-  // step through the pane's matches.
+  // Live-follow the first match as the search term is typed — on the list
+  // (list-only or split). In maximized preview mode, search targets the pane,
+  // so typing just updates highlights; use n/N to step through its matches.
   function jumpFirst(): void {
-    if (!search || detail) return;
+    if (!search || (detail && maximized)) return;
     const hits = matchIndexes();
     if (!hits.length) return;
     const base = follow ? 0 : sel[tab];
@@ -681,23 +685,15 @@ export function runRnTui(port: number, nameFilter?: string): void {
       } else if (key.name === 'escape') {
         if (mode === 'search') search = '';
         mode = 'normal';
-      } else if (key.name === 'backspace') {
-        input = input.slice(0, -1);
+      } else if (key.name === 'backspace' || (str && !key.ctrl)) {
+        input = key.name === 'backspace' ? input.slice(0, -1) : input + str;
         if (mode === 'filter') {
           filter = input;
           if (detail) refreshDetail();
         } else {
           search = input;
           jumpFirst();
-        }
-      } else if (str && !key.ctrl) {
-        input += str;
-        if (mode === 'filter') {
-          filter = input;
-          if (detail) refreshDetail();
-        } else {
-          search = input;
-          jumpFirst();
+          if (detail && !maximized) refreshDetail(); // split pane follows the list selection
         }
       }
       render();
@@ -710,52 +706,40 @@ export function runRnTui(port: number, nameFilter?: string): void {
 
     const h = height();
     const n = count();
-    const base = follow ? n - 1 : sel[tab];
     const prevSel = sel[tab];
     const prevFollow = follow;
     const prevKey = activeKey;
     const prevFilter = filter;
     const prevErrors = errorsOnly;
     const prevMethod = method;
+    // Maximized = "preview mode": every movement/copy key drives the pane.
+    // Otherwise (list-only or split) = "list mode": keys drive the list.
+    const previewMode = detail && maximized;
     const detailMax = () => Math.max(0, detailLinesNow().length - h);
-    const toLast = () => {
-      follow = true;
-      sel[tab] = Math.max(0, n - 1);
-    };
-    const toIndex = (i: number) => {
-      const next = clamp(i, 0, Math.max(0, n - 1));
-      if (next >= n - 1) toLast();
-      else {
-        follow = false;
-        sel[tab] = next;
-      }
+    const scrollDetail = (d: number) => {
+      detailScroll = clamp(detailScroll + d, 0, detailMax());
+      detailHit = -1;
     };
 
+    // ── keys shared by both modes ───────────────────────────────────────────
     if (str === '[') switchTab(-1);
     else if (str === ']') switchTab(1);
-    else if (str === '/') {
-      mode = 'search';
-      input = search;
-      if (detail) {
-        detailScroll = 0; // search always starts at the top of the preview
-        detailHit = -1;
-      }
-    } else if (str === 'f') {
+    else if (str === 'f') {
       mode = 'filter';
       input = filter;
-    } else if (str === 'c') {
-      // While inspecting a row, c copies it (network → curl); otherwise it clears.
-      if (detail) return tab === 'network' ? copyCurl() : copySelection();
-      active().logs.length = 0;
-      active().net.length = 0;
-      if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
+    } else if (str === '/') {
+      mode = 'search';
+      input = search;
+      if (previewMode) {
+        detailScroll = 0; // preview search starts at the top of the pane
+        detailHit = -1;
+      }
     } else if (str === 'z') {
       // Toggle a full-width (maximized) preview; open one if none is up.
       if (!detail) openDetail();
       maximized = !maximized;
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str === 'y') return copySelection();
-    else if (str === 'C') return copyCurl();
     else if (str === 'e' && tab === 'network') errorsOnly = !errorsOnly;
     else if (str === 'm' && tab === 'network') method = METHODS[(METHODS.indexOf(method) + 1) % METHODS.length];
     else if (str === 'a' || key.name === 'space') {
@@ -770,33 +754,60 @@ export function runRnTui(port: number, nameFilter?: string): void {
       if (activeKey) client.reloadApp(activeKey);
     } else if (key.name === 'return' || key.name === 'escape') {
       detail ? closeDetail() : openDetail();
-    } else if (str === 'J') {
-      // Scroll the detail pane (list selection stays put).
-      if (detail) {
-        detailScroll = Math.min(detailMax(), detailScroll + 1);
+    } else if (previewMode) {
+      // ── preview mode: keys drive the maximized pane ───────────────────────
+      if (str === 'c') return tab === 'network' ? copyCurl() : copySelection();
+      else if (str === 'n') jumpDetail(1);
+      else if (str === 'N') jumpDetail(-1);
+      else if (key.name === 'up' || str === 'k' || str === 'K') scrollDetail(-1);
+      else if (key.name === 'down' || str === 'j' || str === 'J') scrollDetail(1);
+      else if (key.name === 'pageup') scrollDetail(-h);
+      else if (key.name === 'pagedown') scrollDetail(h);
+      else if (str === 'g') {
+        detailScroll = 0;
+        detailHit = -1;
+      } else if (str === 'G') {
+        detailScroll = detailMax();
         detailHit = -1;
       }
-    } else if (str === 'K') {
-      if (detail) {
-        detailScroll = Math.max(0, detailScroll - 1);
-        detailHit = -1;
-      }
-    } else if (str === 'n') detail ? jumpDetail(1) : jump(1);
-    else if (str === 'N') detail ? jumpDetail(-1) : jump(-1);
-    else if (key.name === 'up' || str === 'k') {
-      follow = false;
-      sel[tab] = clamp(base - 1, 0, Math.max(0, n - 1));
-    } else if (key.name === 'down' || str === 'j') toIndex(base + 1);
-    else if (key.name === 'pageup') {
-      follow = false;
-      sel[tab] = clamp(base - h, 0, Math.max(0, n - 1));
-    } else if (key.name === 'pagedown') toIndex(base + h);
-    else if (str === 'g') {
-      follow = false;
-      sel[tab] = 0;
-    } else if (str === 'G') toLast();
+    } else {
+      // ── list mode (list-only or split): keys drive the list ───────────────
+      const base = follow ? n - 1 : sel[tab];
+      const toLast = () => {
+        follow = true;
+        sel[tab] = Math.max(0, n - 1);
+      };
+      const toIndex = (i: number) => {
+        const next = clamp(i, 0, Math.max(0, n - 1));
+        if (next >= n - 1) toLast();
+        else {
+          follow = false;
+          sel[tab] = next;
+        }
+      };
+      if (str === 'c') {
+        active().logs.length = 0;
+        active().net.length = 0;
+        if (activeKey) client.discardConsole(activeKey); // so a reconnect won't replay
+      } else if (str === 'J') scrollDetail(1); // scroll the split pane (if open)
+      else if (str === 'K') scrollDetail(-1);
+      else if (str === 'n') jump(1);
+      else if (str === 'N') jump(-1);
+      else if (key.name === 'up' || str === 'k') {
+        follow = false;
+        sel[tab] = clamp(base - 1, 0, Math.max(0, n - 1));
+      } else if (key.name === 'down' || str === 'j') toIndex(base + 1);
+      else if (key.name === 'pageup') {
+        follow = false;
+        sel[tab] = clamp(base - h, 0, Math.max(0, n - 1));
+      } else if (key.name === 'pagedown') toIndex(base + h);
+      else if (str === 'g') {
+        follow = false;
+        sel[tab] = 0;
+      } else if (str === 'G') toLast();
+    }
 
-    // When the split pane is open, keep it in sync with whatever the list now shows.
+    // When the split pane is open, keep it in sync with whatever the list shows.
     if (
       detail &&
       (sel[tab] !== prevSel ||
