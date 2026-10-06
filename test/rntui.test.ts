@@ -1,8 +1,17 @@
 import { describe, it, expect } from 'vitest';
 import chalk from 'chalk';
-import { FrameState, filterEntries, frameHeight, highlight, renderFrame } from '../src/commands/rntui';
+import {
+  FrameState,
+  filterEntries,
+  filterRecords,
+  frameHeight,
+  highlight,
+  netDetailLines,
+  netSummary,
+  renderFrame,
+} from '../src/commands/rntui';
 import { toEntry } from '../src/utils/rnclient';
-import type { LogEntry } from '../src/utils/rnclient';
+import type { LogEntry, NetRecord } from '../src/utils/rnclient';
 
 chalk.level = 3; // force color output so highlight emits ANSI in the test env
 
@@ -59,6 +68,10 @@ function frame(partial: Partial<FrameState>): string {
     rows: 12,
     tab: 'logs',
     buffers: { logs: [], network: [] },
+    netRecords: [],
+    netSel: 0,
+    detail: false,
+    detailScroll: 0,
     scroll: 0,
     follow: true,
     filter: '',
@@ -123,5 +136,63 @@ describe('renderFrame', () => {
     expect(f).toContain('1:iPhone');
     expect(f).toContain('2:Pixel');
     expect(f).toContain('1-9 device');
+  });
+
+  it('lists network records on the network tab', () => {
+    const f = frame({
+      tab: 'network',
+      netRecords: [{ id: '1', method: 'POST', url: 'https://api/x', status: 200 }],
+    });
+    expect(f).toContain('200');
+    expect(f).toContain('POST https://api/x');
+    expect(f).toContain('enter details');
+  });
+
+  it('renders a request detail view', () => {
+    const rec: NetRecord = {
+      id: '1',
+      method: 'POST',
+      url: 'https://api/x',
+      status: 201,
+      reqHeaders: { 'content-type': 'application/json' },
+      reqBody: '{"a":1}',
+      resBody: '{"ok":true}',
+    };
+    const f = frame({ tab: 'network', detail: true, rows: 40, netRecords: [rec] });
+    expect(f).toContain('Request headers');
+    expect(f).toContain('content-type: application/json');
+    expect(f).toContain('Response body');
+    expect(f).toContain('esc back');
+  });
+});
+
+const sampleRec: NetRecord = { id: '1', method: 'GET', url: 'https://api/orders', status: 404 };
+
+describe('netSummary', () => {
+  it('formats status, method and url, flagging 4xx+', () => {
+    const s = netSummary(sampleRec);
+    expect(s.text).toContain('404');
+    expect(s.text).toContain('GET https://api/orders');
+    expect(s.error).toBe(true);
+  });
+  it('marks pending when there is no status yet', () => {
+    expect(netSummary({ id: '2', method: 'GET', url: 'u' }).pending).toBe(true);
+  });
+});
+
+describe('filterRecords', () => {
+  it('filters by method/url substring', () => {
+    const recs: NetRecord[] = [sampleRec, { id: '2', method: 'POST', url: 'https://api/login' }];
+    expect(filterRecords(recs, 'login')).toHaveLength(1);
+    expect(filterRecords(recs, 'GET')).toHaveLength(1);
+    expect(filterRecords(recs, '')).toHaveLength(2);
+  });
+});
+
+describe('netDetailLines', () => {
+  it('pretty-prints JSON bodies and notes missing data', () => {
+    const lines = netDetailLines({ id: '1', method: 'POST', url: 'u', reqBody: '{"a":1}' }).join('\n');
+    expect(lines).toContain('"a": 1'); // pretty-printed
+    expect(lines).toContain('(not captured)'); // response body absent
   });
 });

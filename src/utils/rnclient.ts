@@ -76,12 +76,25 @@ export interface TargetInfo {
   label: string;
 }
 
+export interface NetRecord {
+  id: string;
+  method: string;
+  url: string;
+  status?: number;
+  mimeType?: string;
+  reqHeaders?: Record<string, string>;
+  reqBody?: string;
+  resHeaders?: Record<string, string>;
+  resBody?: string;
+}
+
 export class RnClient extends EventEmitter {
   private ws?: WebSocket;
   private stopped = false;
   private timer?: ReturnType<typeof setTimeout>;
   private targets: TargetInfo[] = [];
   private selectedKey?: string;
+  private netRecords = new Map<string, NetRecord>();
 
   constructor(private port: number, private nameFilter?: string, private retryMs = 2000) {
     super();
@@ -119,6 +132,33 @@ export class RnClient extends EventEmitter {
         /* ignore */
       }
       this.ws = undefined;
+    }
+  }
+
+  private handleNetwork(msg: { method?: string; params?: any }, fetchBody: (id: string) => void): void {
+    const p = msg.params ?? {};
+    if (msg.method === 'Network.requestWillBeSent') {
+      const r = p.request ?? {};
+      const rec: NetRecord = {
+        id: p.requestId,
+        method: r.method ?? 'GET',
+        url: r.url ?? '',
+        reqHeaders: r.headers,
+        reqBody: r.postData,
+      };
+      this.netRecords.set(p.requestId, rec);
+      this.emit('net', rec);
+    } else if (msg.method === 'Network.responseReceived') {
+      const rec = this.netRecords.get(p.requestId);
+      if (rec) {
+        const res = p.response ?? {};
+        rec.status = res.status;
+        rec.resHeaders = res.headers;
+        rec.mimeType = res.mimeType;
+        this.emit('net', rec);
+      }
+    } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
+      if (this.netRecords.has(p.requestId)) fetchBody(p.requestId);
     }
   }
 
@@ -168,6 +208,15 @@ export class RnClient extends EventEmitter {
     const send = (method: string) => ws.send(JSON.stringify({ id: id++, method }));
     const NETWORK_ENABLE_ID = 3;
 
+    // Response bodies are fetched on demand; map our getResponseBody call id → requestId.
+    const pendingBody = new Map<number, string>();
+    let cmdId = 100;
+    const fetchBody = (requestId: string) => {
+      const c = cmdId++;
+      pendingBody.set(c, requestId);
+      ws.send(JSON.stringify({ id: c, method: 'Network.getResponseBody', params: { requestId } }));
+    };
+
     ws.on('open', () => {
       send('Runtime.enable');
       send('Log.enable');
@@ -183,6 +232,22 @@ export class RnClient extends EventEmitter {
       }
       if (msg.id === NETWORK_ENABLE_ID) {
         this.emit('network', !msg.error);
+        return;
+      }
+      if (msg.id && pendingBody.has(msg.id)) {
+        const reqId = pendingBody.get(msg.id)!;
+        pendingBody.delete(msg.id);
+        const rec = this.netRecords.get(reqId);
+        if (rec && msg.result) {
+          rec.resBody = msg.result.base64Encoded
+            ? Buffer.from(msg.result.body ?? '', 'base64').toString('utf8')
+            : msg.result.body;
+          this.emit('net', rec);
+        }
+        return;
+      }
+      if (typeof msg.method === 'string' && msg.method.startsWith('Network.')) {
+        this.handleNetwork(msg, fetchBody);
         return;
       }
       const entry = toEntry(msg);
