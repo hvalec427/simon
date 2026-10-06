@@ -3,10 +3,14 @@ import { spinner } from '../utils/prompt.js';
 import {
   Channel,
   currentVersion,
+  changelogSince,
   downloadBinary,
   installBinary,
+  installTarget,
   latestForChannel,
+  needsSudo,
   loadChannel,
+  platformSupported,
   saveChannel,
 } from '../utils/update.js';
 
@@ -29,6 +33,10 @@ function resolveChannel(options: UpdateOptions): Channel {
 }
 
 export async function updateCommand(options: UpdateOptions): Promise<void> {
+  if (!platformSupported()) {
+    console.error(chalk.yellow('simon self-update is macOS-only (arm64/x64). Build from source on other platforms.'));
+    process.exit(1);
+  }
   const channel = resolveChannel(options);
   const current = currentVersion();
 
@@ -50,6 +58,14 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
 
   console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
 
+  const notes = await changelogSince(channel, current);
+  if (notes) {
+    console.log();
+    console.log(chalk.bold(`What's new (${current} → ${latest.version}):`));
+    console.log(chalk.gray(notes));
+    console.log();
+  }
+
   const stopDl = spinner('Downloading...');
   let tmp: string;
   try {
@@ -61,9 +77,11 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(chalk.gray('Installing to /usr/local/bin (may prompt for your password)...'));
+  const target = installTarget();
+  const sudoNote = needsSudo(target) ? ' (needs sudo — may prompt for your password)' : '';
+  console.log(chalk.gray(`Installing to ${target}${sudoNote}...`));
   try {
-    installBinary(tmp);
+    installBinary(tmp, target);
   } catch (err) {
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);

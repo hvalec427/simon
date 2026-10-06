@@ -5,11 +5,14 @@ import {
   filterEntries,
   filterRecords,
   frameHeight,
+  graphqlOperation,
   highlight,
   logDetailLines,
   netDetailLines,
   netSummary,
+  netView,
   renderFrame,
+  toCurl,
 } from '../src/commands/rntui';
 import { toEntry } from '../src/utils/rnclient';
 import type { LogEntry, NetRecord } from '../src/utils/rnclient';
@@ -68,6 +71,28 @@ describe('toEntry', () => {
     expect(e?.text).toContain('user: ziga');
     expect(e?.text).toContain('n: 2');
   });
+
+  it('expands one nested level from the free valuePreview', () => {
+    const e = toEntry({
+      method: 'Runtime.consoleAPICalled',
+      params: {
+        type: 'log',
+        args: [
+          {
+            type: 'object',
+            preview: {
+              properties: [
+                { name: 'id', value: '7' },
+                { name: 'user', type: 'object', valuePreview: { properties: [{ name: 'name', value: 'ziga' }] } },
+              ],
+            },
+          },
+        ],
+      },
+    });
+    expect(e?.text).toContain('id: 7');
+    expect(e?.text).toContain('user: { name: ziga }'); // nested, no extra CDP call
+  });
 });
 
 function frame(partial: Partial<FrameState>): string {
@@ -90,6 +115,8 @@ function frame(partial: Partial<FrameState>): string {
     who: 'iPhone',
     networkSupported: true,
     targets: [],
+    errorsOnly: false,
+    method: 'ALL',
     ...partial,
   });
 }
@@ -148,6 +175,24 @@ describe('renderFrame', () => {
     expect(frame({ tab: 'network', networkSupported: false })).toContain('isn’t exposed');
   });
 
+  it('renders the performance tab with FPS, heap and a sparkline', () => {
+    const f = frame({
+      tab: 'perf',
+      rows: 20,
+      perf: { fps: 58, heapUsed: 42 * 1048576, heapTotal: 60 * 1048576, history: [30, 45, 58] },
+    });
+    expect(f).toContain('[Perf]');
+    expect(f).toContain('JS thread');
+    expect(f).toContain('58');
+    expect(f).toContain('42.0 MB');
+    expect(f).toContain('60.0 MB');
+    expect(f).toMatch(/[▁▂▃▄▅▆▇█]/); // sparkline
+  });
+
+  it('shows a measuring placeholder when perf has no sample yet', () => {
+    expect(frame({ tab: 'perf', perf: null })).toContain('measuring');
+  });
+
   it('shows a device bar and hint when multiple targets exist', () => {
     const f = frame({ targets: [{ key: 'iPhone', label: 'iPhone' }, { key: 'Pixel', label: 'Pixel' }] });
     expect(f).toContain('Devices:');
@@ -163,7 +208,7 @@ describe('renderFrame', () => {
     });
     expect(f).toContain('200');
     expect(f).toContain('POST https://api/x');
-    expect(f).toContain('expand');
+    expect(f).toContain('preview');
   });
 
   it('renders a request detail view', () => {
@@ -191,6 +236,61 @@ describe('renderFrame', () => {
     });
     expect(f).toContain('"user": "ziga"');
   });
+
+  it('shows the list and detail side by side when a row is expanded', () => {
+    const f = frame({
+      detail: true,
+      rows: 20,
+      buffers: {
+        logs: [
+          { kind: 'console', level: 'log', text: 'alpha-row' },
+          { kind: 'console', level: 'log', text: '{"user":"ziga"}' },
+        ],
+        network: [],
+      },
+      sel: 1,
+      follow: false,
+    });
+    expect(f).toContain('alpha-row'); // list still visible (left pane)
+    expect(f).toContain('"user": "ziga"'); // detail (right pane)
+    expect(f).toContain('│'); // column separator
+    expect(f).toContain('JK scroll'); // footer reflects split-pane controls
+  });
+
+  it('maximizes the preview to full width (no separator)', () => {
+    const f = frame({
+      detail: true,
+      maximized: true,
+      rows: 20,
+      buffers: { logs: [{ kind: 'console', level: 'log', text: '{"user":"ziga"}' }], network: [] },
+      sel: 0,
+      follow: false,
+    });
+    expect(f).toContain('"user": "ziga"');
+    expect(f).toContain('z split'); // footer shows the restore-to-split toggle
+    expect(f).toContain('jk/JK scroll'); // maximized: j/k drive the pane
+    expect(f).not.toContain('│'); // list hidden → no column separator
+  });
+
+  it('paints the active match differently from other matches', () => {
+    const f = frame({
+      search: 'ab',
+      detail: false,
+      buffers: {
+        logs: [
+          { kind: 'console', level: 'log', text: 'ab one' }, // selected → current match
+          { kind: 'console', level: 'log', text: 'ab two' }, // other match
+        ],
+        network: [],
+      },
+      sel: 0,
+      follow: false,
+    });
+    const CURRENT = '\x1b[103m'; // bgYellowBright
+    const OTHER = '\x1b[106m'; // bgCyanBright
+    expect(f).toContain(CURRENT);
+    expect(f).toContain(OTHER);
+  });
 });
 
 describe('logDetailLines', () => {
@@ -213,6 +313,63 @@ describe('netSummary', () => {
   });
   it('marks pending when there is no status yet', () => {
     expect(netSummary({ id: '2', method: 'GET', url: 'u' }).pending).toBe(true);
+  });
+  it('shows request duration when known (ms and s)', () => {
+    expect(netSummary({ id: '3', method: 'GET', url: 'u', status: 200, durationMs: 123 }).text).toContain('123ms');
+    expect(netSummary({ id: '4', method: 'GET', url: 'u', status: 200, durationMs: 1500 }).text).toContain('1.5s');
+  });
+});
+
+describe('netView', () => {
+  const recs: NetRecord[] = [
+    { id: '1', method: 'GET', url: 'https://api/a', status: 200 },
+    { id: '2', method: 'POST', url: 'https://api/b', status: 500 },
+    { id: '3', method: 'POST', url: 'https://api/c', status: 404 },
+  ];
+  it('filters by errors-only (status >= 400)', () => {
+    expect(netView(recs, '', true, 'ALL').map(r => r.id)).toEqual(['2', '3']);
+  });
+  it('filters by HTTP method', () => {
+    expect(netView(recs, '', false, 'POST').map(r => r.id)).toEqual(['2', '3']);
+    expect(netView(recs, '', false, 'GET').map(r => r.id)).toEqual(['1']);
+  });
+  it('combines text, errors and method filters', () => {
+    expect(netView(recs, 'api', true, 'POST').map(r => r.id)).toEqual(['2', '3']);
+    expect(netView(recs, 'a', true, 'GET')).toEqual([]); // GET /a is 200, excluded by errors-only
+  });
+});
+
+describe('toCurl', () => {
+  it('builds a curl command with method, headers and body', () => {
+    const out = toCurl({
+      id: '1',
+      method: 'POST',
+      url: 'https://api/x',
+      reqHeaders: { 'content-type': 'application/json' },
+      reqBody: '{"a":1}',
+    });
+    expect(out).toContain('curl -X POST "https://api/x"');
+    expect(out).toContain('-H "content-type: application/json"');
+    expect(out).toContain('--data "{\\"a\\":1}"');
+  });
+});
+
+describe('graphqlOperation / netSummary', () => {
+  it('uses operationName when present', () => {
+    const rec: NetRecord = { id: '1', method: 'POST', url: '/graphql', reqBody: JSON.stringify({ operationName: 'GetOrders', query: 'query GetOrders { x }' }) };
+    expect(graphqlOperation(rec)).toBe('GetOrders');
+    expect(netSummary(rec).text).toContain('GetOrders');
+  });
+  it('falls back to the name in the query', () => {
+    expect(graphqlOperation({ id: '2', method: 'POST', url: '/g', reqBody: '{"query":"mutation ClaimOrder { y }"}' })).toBe('ClaimOrder');
+  });
+  it('handles anonymous and batched operations', () => {
+    expect(graphqlOperation({ id: '3', method: 'POST', url: '/g', reqBody: '{"query":"{ me }"}' })).toBe('anonymous');
+    expect(graphqlOperation({ id: '4', method: 'POST', url: '/g', reqBody: '[{"operationName":"A","query":"query A{x}"},{"operationName":"B","query":"query B{y}"}]' })).toBe('A, B');
+  });
+  it('returns undefined for non-GraphQL requests', () => {
+    expect(graphqlOperation({ id: '5', method: 'GET', url: '/rest' })).toBeUndefined();
+    expect(graphqlOperation({ id: '6', method: 'POST', url: '/x', reqBody: 'not json' })).toBeUndefined();
   });
 });
 

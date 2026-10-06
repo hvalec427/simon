@@ -15,6 +15,7 @@ import { doctorCommand } from './commands/doctor.js';
 import { pushCommand } from './commands/push.js';
 import { locationCommand } from './commands/location.js';
 import { tunnelCommand } from './commands/tunnel.js';
+import { completionsCommand } from './commands/completions.js';
 
 const program = new Command();
 
@@ -31,28 +32,28 @@ program
   .action(createCommand);
 
 program
-  .command('delete')
-  .description('Delete a simulator or emulator (picks from a list if no flag given)')
+  .command('delete [name]')
+  .description('Delete a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(deleteCommand);
 
 program
-  .command('launch')
-  .description('Launch a simulator or emulator (picks from a list if no flag given)')
+  .command('launch [name]')
+  .description('Launch a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(launchCommand);
 
 program
-  .command('stop')
-  .description('Stop a running simulator or emulator (picks from a list if no flag given)')
+  .command('stop [name]')
+  .description('Stop a running simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(stopCommand);
 
 program
-  .command('open-link <url>')
+  .command('open-link <url> [name]')
   .description('Open a deep link on a running simulator, emulator, or physical device')
   .option('-i, --ios [name]', 'Open on iOS simulator or device')
   .option('-a, --android [name]', 'Open on Android emulator or device')
@@ -61,7 +62,7 @@ program
   .action(openLinkCommand);
 
 program
-  .command('logs')
+  .command('logs [name]')
   .description('Stream logs from a running simulator, emulator, or physical device')
   .option('-i, --ios [name]', 'Stream logs from iOS simulator or device')
   .option('-a, --android [name]', 'Stream logs from Android emulator or device')
@@ -69,11 +70,12 @@ program
   .option('--app <name>', 'Show only this app\'s logs (process/app name; bundle id also works on iOS simulators)')
   .option('--rn', 'Stream React Native JS console + network from Metro (CDP), not device logs')
   .option('--port <port>', 'Metro port for --rn (default 8081)')
+  .option('--print-ws', 'Print the Metro inspector WebSocket URL(s) for --rn targets and exit (e.g. for nvim-dap)')
   .action(logsCommand);
 
 program
-  .command('wipe')
-  .description('Wipe all data on a simulator or emulator (picks from a list if no flag given)')
+  .command('wipe [name]')
+  .description('Wipe all data on a simulator or emulator (picks from a list if no flag/name given)')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .action(wipeCommand);
@@ -91,7 +93,7 @@ program
   .action(runningCommand);
 
 program
-  .command('location [coords]')
+  .command('location [coords] [name]')
   .description('Set a simulated GPS location (coords as "lat,lon") on a simulator, emulator, or physical iOS device')
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
@@ -132,6 +134,11 @@ program
   .option('--nightly', 'Switch to and update from the nightly (develop) channel')
   .option('--stable', 'Switch to and update from the stable (master) channel')
   .action(updateCommand);
+
+program
+  .command('completions [shell]')
+  .description('Print a shell completion script (zsh)')
+  .action(shell => completionsCommand(shell, program));
 
 process.on('uncaughtException', err => {
   if ((err as NodeJS.ErrnoException).name === 'ExitPromptError') process.exit(0);

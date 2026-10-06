@@ -5,11 +5,18 @@ export interface LogEntry {
   kind: 'console' | 'network' | 'system';
   level: string;
   text: string;
+  argObjectIds?: string[]; // objectIds of object/array args, for deep expansion
 }
 
 export interface TargetInfo {
   key: string;
   label: string;
+}
+
+export interface PerfSample {
+  fps: number | null; // JS-thread frames/sec (null if Runtime.evaluate unsupported)
+  heapUsed: number | null; // bytes
+  heapTotal: number | null; // bytes
 }
 
 export interface NetRecord {
@@ -22,6 +29,8 @@ export interface NetRecord {
   reqBody?: string;
   resHeaders?: Record<string, string>;
   resBody?: string;
+  startTs?: number; // CDP monotonic timestamp (seconds) at request start
+  durationMs?: number; // request→finished, once known
 }
 
 export type Status = 'connecting' | 'connected' | 'disconnected' | 'reconnecting';
@@ -37,6 +46,8 @@ interface PreviewProp {
   name: string;
   value?: string;
   type?: string;
+  subtype?: string;
+  valuePreview?: ObjectPreview; // nested preview the runtime already sent (free)
 }
 interface ObjectPreview {
   subtype?: string;
@@ -50,10 +61,20 @@ interface RemoteObject {
   description?: string;
   unserializableValue?: string;
   preview?: ObjectPreview;
+  objectId?: string;
+}
+
+function remoteValue(v: RemoteObject): string {
+  if (v == null) return '';
+  if (v.value !== undefined) return typeof v.value === 'string' ? v.value : JSON.stringify(v.value);
+  if (v.description) return v.description;
+  return v.type ?? '';
 }
 
 function previewToString(p: ObjectPreview): string {
-  const parts = (p.properties ?? []).map(pr => (p.subtype === 'array' ? `${pr.value}` : `${pr.name}: ${pr.value}`));
+  const valueOf = (pr: PreviewProp): string =>
+    pr.valuePreview ? previewToString(pr.valuePreview) : pr.value ?? pr.type ?? '';
+  const parts = (p.properties ?? []).map(pr => (p.subtype === 'array' ? valueOf(pr) : `${pr.name}: ${valueOf(pr)}`));
   if (p.overflow) parts.push('…');
   return p.subtype === 'array' ? `[${parts.join(', ')}]` : `{ ${parts.join(', ')} }`;
 }
@@ -71,7 +92,11 @@ export function toEntry(msg: { method?: string; params?: any }): LogEntry | null
   switch (msg.method) {
     case 'Runtime.consoleAPICalled': {
       const { type = 'log', args = [] } = msg.params ?? {};
-      return { kind: 'console', level: type, text: (args as RemoteObject[]).map(renderArg).join(' ') };
+      const list = args as RemoteObject[];
+      const ids = list.filter(a => a?.objectId && a.type === 'object').map(a => a.objectId!);
+      const entry: LogEntry = { kind: 'console', level: type, text: list.map(renderArg).join(' ') };
+      if (ids.length) entry.argObjectIds = ids;
+      return entry;
     }
     case 'Log.entryAdded': {
       const e = msg.params?.entry ?? {};
@@ -88,12 +113,22 @@ export function toEntry(msg: { method?: string; params?: any }): LogEntry | null
 
 const keyOf = (t: RnTarget) => t.deviceName || t.title || 'app';
 
+// List Metro inspector targets (label + CDP WebSocket URL) — handy for pointing
+// an external debugger (e.g. nvim-dap's attach) at the right endpoint.
+export async function fetchInspectorTargets(port: number): Promise<{ label: string; url: string }[]> {
+  const res = await fetch(`http://localhost:${port}/json`);
+  if (!res.ok) throw new Error(`Metro inspector returned ${res.status} ${res.statusText}`);
+  const targets = (await res.json()) as RnTarget[];
+  return targets.filter(t => t.webSocketDebuggerUrl).map(t => ({ label: keyOf(t), url: t.webSocketDebuggerUrl! }));
+}
+
 interface Conn {
   key: string;
   ws?: WebSocket;
   connected: boolean;
   netRecords: Map<string, NetRecord>;
   cmdSeq: number;
+  pending: Map<number, (result: any) => void>;
 }
 
 /**
@@ -158,10 +193,92 @@ export class RnClient extends EventEmitter {
     }
   }
 
+  // Sample performance for a device: JS-thread FPS (via an injected
+  // requestAnimationFrame counter) and JS heap usage. Native/UI FPS isn't
+  // available over CDP. Returns null if the device isn't connected.
+  async perfSample(key: string): Promise<PerfSample | null> {
+    const conn = this.conns.get(key);
+    if (!conn?.ws || !conn.connected) return null;
+    // Installs a once-per-second rAF frame counter on first call (idempotent),
+    // then returns the most recent frames-per-second value.
+    const expr =
+      '(function(){var s=globalThis.__simonFps;if(!s){s=globalThis.__simonFps={v:0,c:0,t:Date.now()};' +
+      'var loop=function(){s.c++;var n=Date.now();if(n-s.t>=1000){s.v=Math.round(s.c*1000/(n-s.t));s.c=0;s.t=n;}' +
+      '(globalThis.requestAnimationFrame||function(f){return setTimeout(f,16);})(loop);};loop();}return s.v;})()';
+    let fps: number | null = null;
+    let heapUsed: number | null = null;
+    let heapTotal: number | null = null;
+    try {
+      const r = await this.request(conn, 'Runtime.evaluate', { expression: expr, returnByValue: true });
+      const v = r?.result?.value;
+      fps = typeof v === 'number' ? v : null;
+    } catch {
+      /* evaluate unsupported */
+    }
+    try {
+      const h = await this.request(conn, 'Runtime.getHeapUsage', {});
+      if (typeof h?.usedSize === 'number') heapUsed = h.usedSize;
+      if (typeof h?.totalSize === 'number') heapTotal = h.totalSize;
+    } catch {
+      /* heap usage unsupported by this runtime */
+    }
+    return { fps, heapUsed, heapTotal };
+  }
+
+  // Lazily expand an object's properties (deep) via Runtime.getProperties —
+  // objectIds are only valid while the runtime still holds them.
+  async getObjectTree(key: string, objectIds: string[], depth = 4): Promise<string[]> {
+    const conn = this.conns.get(key);
+    if (!conn?.ws || !conn.connected) return ['(device not connected — reconnect to inspect)'];
+    const lines: string[] = [];
+    for (const oid of objectIds) lines.push(...(await this.expandObject(conn, oid, depth, '')));
+    return lines;
+  }
+
+  private async expandObject(conn: Conn, objectId: string, depth: number, indent: string): Promise<string[]> {
+    let res: any;
+    try {
+      res = await this.request(conn, 'Runtime.getProperties', { objectId, ownProperties: true });
+    } catch {
+      return [`${indent}(unavailable — object no longer in memory)`];
+    }
+    const props = ((res?.result ?? []) as any[]).filter(p => p.value && p.enumerable !== false);
+    if (!props.length) return [`${indent}(no properties)`];
+    const out: string[] = [];
+    for (const p of props.slice(0, 200)) {
+      const v = p.value as RemoteObject;
+      if (v.type === 'object' && v.objectId && depth > 0) {
+        out.push(`${indent}${p.name}: ${v.description ?? (v.subtype === 'array' ? 'Array' : 'Object')}`);
+        out.push(...(await this.expandObject(conn, v.objectId, depth - 1, indent + '  ')));
+      } else {
+        out.push(`${indent}${p.name}: ${remoteValue(v)}`);
+      }
+    }
+    return out;
+  }
+
+  private request(conn: Conn, method: string, params: object): Promise<any> {
+    return new Promise((resolve, reject) => {
+      if (!conn.ws) return reject(new Error('not connected'));
+      const reqId = conn.cmdSeq++;
+      const timer = setTimeout(() => {
+        conn.pending.delete(reqId);
+        reject(new Error('timeout'));
+      }, 5000);
+      conn.pending.set(reqId, result => {
+        clearTimeout(timer);
+        resolve(result);
+      });
+      conn.ws.send(JSON.stringify({ id: reqId, method, params }));
+    });
+  }
+
   private closeConn(c: Conn): void {
+    c.pending.clear();
     if (c.ws) {
       try {
         c.ws.removeAllListeners();
+        c.ws.on('error', () => {}); // swallow the late abort error when closing while still connecting
         c.ws.close();
       } catch {
         /* ignore */
@@ -197,7 +314,7 @@ export class RnClient extends EventEmitter {
   private openConn(key: string, url: string): void {
     let conn = this.conns.get(key);
     if (!conn) {
-      conn = { key, connected: false, netRecords: new Map(), cmdSeq: 1000 };
+      conn = { key, connected: false, netRecords: new Map(), cmdSeq: 1000, pending: new Map() };
       this.conns.set(key, conn);
     }
     if (conn.connected || conn.ws) return;
@@ -209,11 +326,17 @@ export class RnClient extends EventEmitter {
     let id = 1;
     const send = (method: string) => ws.send(JSON.stringify({ id: id++, method }));
     const NETWORK_ENABLE_ID = 3;
-    const pendingBody = new Map<number, string>();
-    const fetchBody = (requestId: string) => {
-      const c = conn!.cmdSeq++;
-      pendingBody.set(c, requestId);
-      ws.send(JSON.stringify({ id: c, method: 'Network.getResponseBody', params: { requestId } }));
+    const fetchBody = async (requestId: string) => {
+      try {
+        const r = await this.request(conn!, 'Network.getResponseBody', { requestId });
+        const rec = conn!.netRecords.get(requestId);
+        if (rec && r) {
+          rec.resBody = r.base64Encoded ? Buffer.from(r.body ?? '', 'base64').toString('utf8') : r.body;
+          this.emit('net', key, rec);
+        }
+      } catch {
+        /* body unavailable */
+      }
     };
 
     ws.on('open', () => {
@@ -234,16 +357,10 @@ export class RnClient extends EventEmitter {
         this.emit('network', key, !msg.error);
         return;
       }
-      if (msg.id && pendingBody.has(msg.id)) {
-        const reqId = pendingBody.get(msg.id)!;
-        pendingBody.delete(msg.id);
-        const rec = conn!.netRecords.get(reqId);
-        if (rec && msg.result) {
-          rec.resBody = msg.result.base64Encoded
-            ? Buffer.from(msg.result.body ?? '', 'base64').toString('utf8')
-            : msg.result.body;
-          this.emit('net', key, rec);
-        }
+      if (msg.id && conn!.pending.has(msg.id)) {
+        const cb = conn!.pending.get(msg.id)!;
+        conn!.pending.delete(msg.id);
+        cb(msg.result);
         return;
       }
       if (msg.method === 'Runtime.executionContextsCleared') {
@@ -272,7 +389,14 @@ export class RnClient extends EventEmitter {
     const p = msg.params ?? {};
     if (msg.method === 'Network.requestWillBeSent') {
       const r = p.request ?? {};
-      const rec: NetRecord = { id: p.requestId, method: r.method ?? 'GET', url: r.url ?? '', reqHeaders: r.headers, reqBody: r.postData };
+      const rec: NetRecord = {
+        id: p.requestId,
+        method: r.method ?? 'GET',
+        url: r.url ?? '',
+        reqHeaders: r.headers,
+        reqBody: r.postData,
+        startTs: typeof p.timestamp === 'number' ? p.timestamp : undefined,
+      };
       conn.netRecords.set(p.requestId, rec);
       this.emit('net', key, rec);
     } else if (msg.method === 'Network.responseReceived') {
@@ -285,7 +409,14 @@ export class RnClient extends EventEmitter {
         this.emit('net', key, rec);
       }
     } else if (msg.method === 'Network.loadingFinished' || msg.method === 'Network.loadingFailed') {
-      if (conn.netRecords.has(p.requestId)) fetchBody(p.requestId);
+      const rec = conn.netRecords.get(p.requestId);
+      if (rec) {
+        if (rec.startTs !== undefined && typeof p.timestamp === 'number') {
+          rec.durationMs = Math.max(0, (p.timestamp - rec.startTs) * 1000);
+        }
+        this.emit('net', key, rec);
+        fetchBody(p.requestId);
+      }
     }
   }
 }

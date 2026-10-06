@@ -1,10 +1,10 @@
 import { execSync } from 'child_process';
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { accessSync, chmodSync, constants, existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
 
 const REPO = 'hvalec427/simon';
-const INSTALL_PATH = '/usr/local/bin/simon';
+const DEFAULT_INSTALL_PATH = '/usr/local/bin/simon';
 
 export type Channel = 'stable' | 'nightly';
 
@@ -12,6 +12,11 @@ const GH_HEADERS = { Accept: 'application/vnd.github+json', 'User-Agent': 'simon
 
 export function currentVersion(): string {
   return process.env.npm_package_version ?? 'unknown';
+}
+
+// Binaries are published for macOS (arm64/x64) only.
+export function platformSupported(): boolean {
+  return process.platform === 'darwin' && (process.arch === 'arm64' || process.arch === 'x64');
 }
 
 function channelConfigPath(): string {
@@ -60,6 +65,54 @@ export async function latestForChannel(channel: Channel): Promise<{ version: str
   return { version: nightly.tag_name.replace(/^v/, ''), tag: nightly.tag_name };
 }
 
+// Drop the per-build "Install this build" section from a release body — not
+// useful when we're already installing.
+function stripInstall(body: string): string {
+  return (body ?? '').split(/\n#+\s*Install this build/i)[0].trim();
+}
+
+// Release notes (markdown body) for a single tag. Returns undefined on any
+// failure — notes are a nicety, never block an update on them.
+export async function fetchReleaseNotes(tag: string): Promise<string | undefined> {
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/${tag}`, { headers: GH_HEADERS });
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { body?: string };
+    return stripInstall(data.body ?? '') || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Aggregated changelog for every release in `channel` newer than `current`,
+// newest first (stable → stable releases only; nightly → prereleases only). If
+// the current version is unknown, just the latest release's notes. Capped so a
+// long gap doesn't flood the terminal.
+export async function changelogSince(channel: Channel, current: string): Promise<string | undefined> {
+  let releases: { tag_name: string; prerelease: boolean; body?: string }[];
+  try {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100`, { headers: GH_HEADERS });
+    if (!res.ok) return undefined;
+    releases = (await res.json()) as typeof releases;
+  } catch {
+    return undefined;
+  }
+
+  const inChannel = releases
+    .filter(r => (channel === 'stable' ? !r.prerelease : r.prerelease))
+    .sort((a, b) => compareVersions(b.tag_name.replace(/^v/, ''), a.tag_name.replace(/^v/, '')));
+  if (!inChannel.length) return undefined;
+
+  const known = current !== 'unknown' && /^\d/.test(current);
+  const newer = known ? inChannel.filter(r => compareVersions(r.tag_name.replace(/^v/, ''), current) > 0) : inChannel.slice(0, 1);
+  if (!newer.length) return undefined;
+
+  const MAX = 25;
+  const sections = newer.slice(0, MAX).map(r => `## ${r.tag_name}\n\n${stripInstall(r.body ?? '') || '_(no notes)_'}`);
+  if (newer.length > MAX) sections.push(`_… and ${newer.length - MAX} older release(s)._`);
+  return sections.join('\n\n');
+}
+
 // Compare versions incl. `-nightly.N` prereleases: 1 if a > b, -1 if a < b, else 0.
 // A stable X.Y.Z outranks any X.Y.Z-nightly.N.
 export function compareVersions(a: string, b: string): number {
@@ -91,6 +144,39 @@ export async function downloadBinary(tag: string): Promise<string> {
   return tmp;
 }
 
-export function installBinary(tmpPath: string): void {
-  execSync(`sudo mv "${tmpPath}" "${INSTALL_PATH}"`, { stdio: 'inherit' });
+// Where to install over: the actually-running binary (resolving symlinks), so
+// `simon update` replaces the copy you're invoking — not a hardcoded path.
+export function installTarget(): string {
+  const exec = process.execPath;
+  if (path.basename(exec) === 'simon') {
+    try {
+      return realpathSync(exec);
+    } catch {
+      return exec;
+    }
+  }
+  // Running under node (dev) — fall back to whatever `simon` is on PATH.
+  try {
+    const onPath = execSync('command -v simon', { encoding: 'utf8' }).trim();
+    if (onPath) return realpathSync(onPath);
+  } catch {
+    /* none on PATH */
+  }
+  return DEFAULT_INSTALL_PATH;
+}
+
+// Only use sudo when the target directory isn't writable by the current user.
+export function needsSudo(target: string): boolean {
+  const dir = path.dirname(target);
+  try {
+    accessSync(dir, constants.W_OK);
+    return false;
+  } catch {
+    return true;
+  }
+}
+
+export function installBinary(tmpPath: string, target = installTarget()): void {
+  const cmd = needsSudo(target) ? 'sudo mv' : 'mv';
+  execSync(`${cmd} "${tmpPath}" "${target}"`, { stdio: 'inherit' });
 }

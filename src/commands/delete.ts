@@ -2,18 +2,15 @@ import confirm from '@inquirer/confirm';
 import chalk from 'chalk';
 import { deleteAvd } from '../utils/android.js';
 import { deleteSimulator } from '../utils/ios.js';
-import { pickInstalledDevice } from '../utils/devices.js';
+import { pickInstalledDevice, resolveFilterName } from '../utils/devices.js';
 
 interface DeleteOptions {
   ios?: string | boolean;
   android?: string | boolean;
 }
 
-export async function deleteCommand(options: DeleteOptions): Promise<void> {
-  const filter = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-  const name = typeof options.ios === 'string' ? options.ios
-    : typeof options.android === 'string' ? options.android
-    : undefined;
+export async function deleteCommand(target: string | undefined, options: DeleteOptions): Promise<void> {
+  const { filter, name } = resolveFilterName(options, target);
 
   const device = await pickInstalledDevice('Select a device to delete:', { filter, name });
 

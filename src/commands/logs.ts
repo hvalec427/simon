@@ -3,9 +3,10 @@ import { ChildProcess, execSync, spawn } from 'child_process';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import path from 'path';
-import { RunningDevice, pickRunningDevice } from '../utils/devices.js';
+import { RunningDevice, pickRunningDevice, resolveFilterName } from '../utils/devices.js';
 import { ensureGoIos, ensureTunnel } from '../utils/goios.js';
 import { streamReactNativeLogs } from '../utils/rnlogs.js';
+import { fetchInspectorTargets } from '../utils/rnclient.js';
 import { runRnTui } from './rntui.js';
 
 interface LogsOptions {
@@ -15,6 +16,7 @@ interface LogsOptions {
   app?: string;
   rn?: boolean;
   port?: string;
+  printWs?: boolean;
 }
 
 function getAdb(): string {
@@ -44,15 +46,16 @@ function androidPid(adb: string, serial: string, app: string): string | null {
   }
 }
 
-export async function logsCommand(options: LogsOptions): Promise<void> {
-  const platform = options.ios !== undefined ? 'ios' : options.android !== undefined ? 'android' : undefined;
-  const name = typeof options.ios === 'string' ? options.ios
-    : typeof options.android === 'string' ? options.android
-    : undefined;
+export async function logsCommand(target: string | undefined, options: LogsOptions): Promise<void> {
+  const { filter: platform, name } = resolveFilterName(options, target);
 
   try {
     if (options.rn) {
       const port = options.port ? Number(options.port) : 8081;
+      if (options.printWs) {
+        await printInspectorWs(port, name);
+        return;
+      }
       // Interactive TUI in a terminal; plain line stream when piped/redirected.
       if (process.stdout.isTTY) runRnTui(port, name);
       else await streamReactNativeLogs(port, name);
@@ -65,6 +68,29 @@ export async function logsCommand(options: LogsOptions): Promise<void> {
   } catch (err) {
     console.error(chalk.red(err instanceof Error ? err.message : String(err)));
     process.exit(1);
+  }
+}
+
+// Print the Metro inspector WebSocket URL(s) — URLs on stdout (pipeable),
+// labels/hints on stderr — so an external debugger can attach.
+async function printInspectorWs(port: number, name?: string): Promise<void> {
+  let all: { label: string; url: string }[];
+  try {
+    all = await fetchInspectorTargets(port);
+  } catch {
+    console.error(chalk.red(`Couldn't reach Metro on :${port}. Is the bundler running?`));
+    process.exit(1);
+  }
+  const list = name ? all.filter(t => t.label.toLowerCase().includes(name.toLowerCase())) : all;
+  if (!list.length) {
+    console.error(
+      chalk.red(`No Metro inspector targets on :${port}${name ? ` matching "${name}"` : ''}. Is the app running?`),
+    );
+    process.exit(1);
+  }
+  for (const t of list) {
+    if (list.length > 1) process.stderr.write(chalk.gray(`# ${t.label}\n`));
+    console.log(t.url);
   }
 }
 
