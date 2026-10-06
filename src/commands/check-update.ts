@@ -44,7 +44,11 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
     return;
   }
   if (cmp < 0) {
-    console.log(chalk.yellow(`\nThe latest ${channel} build is older than your installed version — nothing newer to install.`));
+    console.log(chalk.yellow(`\nThe latest ${channel} build (${latest.version}) is older than your installed version.`));
+    if (options.nightly || options.stable) {
+      const flag = options.nightly ? ' --nightly' : ' --stable';
+      console.log(chalk.gray(`Run \`simon update${flag}\` to switch to the ${channel} channel (installs ${latest.version}).`));
+    }
     return;
   }
 

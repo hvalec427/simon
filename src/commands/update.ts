@@ -38,7 +38,9 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     console.error(chalk.yellow('simon self-update is macOS-only (arm64/x64). Build from source on other platforms.'));
     process.exit(1);
   }
+  const previousChannel = loadChannel();
   const channel = resolveChannel(options);
+  const switchedChannel = channel !== previousChannel;
   const current = currentVersion();
 
   const stop = spinner(`Checking for ${channel} updates...`);
@@ -57,26 +59,33 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     console.log(chalk.green(`Already on the latest ${channel} version (${current}).`));
     return;
   }
-  if (cmp < 0) {
-    // e.g. switching to nightly right after a stable release: the newest nightly
-    // predates the stable tag, so it's a lower version. Don't downgrade silently.
+  // A lower version is only legitimate when the user explicitly switches channels
+  // (e.g. nightly → stable). Staying on the same channel should never downgrade —
+  // that only happens transiently when a channel's newest build predates the other
+  // channel's latest release.
+  if (cmp < 0 && !switchedChannel) {
     console.log(
       chalk.yellow(`The latest ${channel} build (${latest.version}) is older than your installed ${current} — not downgrading.`),
     );
     console.log(
-      chalk.gray(`Channel set to ${channel}; \`simon update\` will pick up a newer ${channel} build once one is published.`),
+      chalk.gray(`\`simon update\` will pick up a newer ${channel} build once one is published.`),
     );
     return;
   }
 
-  console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
-
-  const notes = await changelogSince(channel, current);
-  if (notes) {
-    console.log();
-    console.log(chalk.bold(`What's new (${current} → ${latest.version}):`));
-    console.log(chalk.gray(notes));
-    console.log();
+  if (cmp < 0) {
+    console.log(
+      chalk.yellow(`Switching to the ${channel} channel — installing ${latest.version} (older than your current ${current}).`),
+    );
+  } else {
+    console.log(`Updating ${chalk.gray(current)} → ${chalk.green(latest.version)} ${chalk.gray(`(${channel})`)}...`);
+    const notes = await changelogSince(channel, current);
+    if (notes) {
+      console.log();
+      console.log(chalk.bold(`What's new (${current} → ${latest.version}):`));
+      console.log(chalk.gray(notes));
+      console.log();
+    }
   }
 
   const stopDl = spinner('Downloading...');
@@ -100,5 +109,5 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  console.log(chalk.green(`Updated to ${latest.version} (${channel}).`));
+  console.log(chalk.green(`${cmp < 0 ? 'Switched to' : 'Updated to'} ${latest.version} (${channel}).`));
 }
