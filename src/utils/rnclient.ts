@@ -71,13 +71,28 @@ export type Status = 'connecting' | 'connected' | 'disconnected' | 'reconnecting
  *   'status'  → (Status, who?)
  *   'network' → (boolean)  whether the Network domain is supported
  */
+export interface TargetInfo {
+  key: string;
+  label: string;
+}
+
 export class RnClient extends EventEmitter {
   private ws?: WebSocket;
   private stopped = false;
   private timer?: ReturnType<typeof setTimeout>;
+  private targets: TargetInfo[] = [];
+  private selectedKey?: string;
 
   constructor(private port: number, private nameFilter?: string) {
     super();
+  }
+
+  // Switch to the target at `index` from the last published target list.
+  select(index: number): void {
+    const t = this.targets[index];
+    if (!t) return;
+    this.selectedKey = t.key;
+    this.reconnectNow();
   }
 
   start(): void {
@@ -127,7 +142,12 @@ export class RnClient extends EventEmitter {
       return;
     }
 
-    let list = targets.filter(t => t.webSocketDebuggerUrl);
+    const all = targets.filter(t => t.webSocketDebuggerUrl);
+    const keyOf = (t: RnTarget) => t.deviceName || t.title || 'app';
+    this.targets = all.map(t => ({ key: keyOf(t), label: keyOf(t) }));
+    this.emit('targets', this.targets);
+
+    let list = all;
     if (this.nameFilter) {
       const n = this.nameFilter.toLowerCase();
       const matched = list.filter(
@@ -135,7 +155,8 @@ export class RnClient extends EventEmitter {
       );
       if (matched.length) list = matched;
     }
-    const target = list[0];
+    // Prefer an explicitly selected device (by key) across reconnects.
+    const target = (this.selectedKey && all.find(t => keyOf(t) === this.selectedKey)) || list[0];
     if (!target?.webSocketDebuggerUrl) {
       this.retryLater();
       return;

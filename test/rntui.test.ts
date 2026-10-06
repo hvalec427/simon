@@ -13,21 +13,14 @@ const entries: LogEntry[] = [
 ];
 
 describe('filterEntries', () => {
-  it('hides network entries when network is off', () => {
-    const r = filterEntries(entries, '', false);
-    expect(r).toHaveLength(2);
-    expect(r.every(e => e.kind !== 'network')).toBe(true);
+  it('filters by substring (case-insensitive)', () => {
+    expect(filterEntries(entries, '47E8')).toHaveLength(1);
+    expect(filterEntries(entries, 'order')).toHaveLength(2); // "order 47e8" + "orders" in the URL
+    expect(filterEntries(entries, 'network')).toHaveLength(1);
   });
 
-  it('filters by substring (case-insensitive) across kinds', () => {
-    expect(filterEntries(entries, '47E8', true)).toHaveLength(1);
-    expect(filterEntries(entries, 'order', true)).toHaveLength(2); // "order 47e8" + "orders" in the URL
-    // "network" matches the console line's text, not the network kind
-    expect(filterEntries(entries, 'network', true)).toHaveLength(1);
-  });
-
-  it('returns everything with no filter and network on', () => {
-    expect(filterEntries(entries, '', true)).toHaveLength(3);
+  it('returns everything with no filter', () => {
+    expect(filterEntries(entries, '')).toHaveLength(3);
   });
 });
 
