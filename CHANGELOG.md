@@ -1,3 +1,10 @@
+# [2.11.0](https://github.com/hvalec427/simon/compare/v2.10.0...v2.11.0) (2026-10-06)
+
+
+### Features
+
+* stream React Native console and network via logs --rn ([c8a0885](https://github.com/hvalec427/simon/commit/c8a088501c7f13ccda3ff857f1620ea3576f09be))
+
 # [2.10.0](https://github.com/hvalec427/simon/compare/v2.9.0...v2.10.0) (2026-10-06)
 
 
