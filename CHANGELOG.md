@@ -1,3 +1,10 @@
+# [2.10.0](https://github.com/hvalec427/simon/compare/v2.9.0...v2.10.0) (2026-10-06)
+
+
+### Features
+
+* stream logs from physical iOS devices and add --app filter ([3fffafd](https://github.com/hvalec427/simon/commit/3fffafdc07cb3ca2dd3f4de13f3ec3d2c18d5a39))
+
 # [2.9.0](https://github.com/hvalec427/simon/compare/v2.8.2...v2.9.0) (2026-10-06)
 
 
