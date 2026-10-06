@@ -4,6 +4,7 @@ import {
   Channel,
   currentVersion,
   changelogSince,
+  compareVersions,
   downloadBinary,
   installBinary,
   installTarget,
@@ -51,8 +52,20 @@ export async function updateCommand(options: UpdateOptions): Promise<void> {
     process.exit(1);
   }
 
-  if (current !== 'unknown' && current === latest.version) {
+  const cmp = current === 'unknown' ? 1 : compareVersions(latest.version, current);
+  if (cmp === 0) {
     console.log(chalk.green(`Already on the latest ${channel} version (${current}).`));
+    return;
+  }
+  if (cmp < 0) {
+    // e.g. switching to nightly right after a stable release: the newest nightly
+    // predates the stable tag, so it's a lower version. Don't downgrade silently.
+    console.log(
+      chalk.yellow(`The latest ${channel} build (${latest.version}) is older than your installed ${current} — not downgrading.`),
+    );
+    console.log(
+      chalk.gray(`Channel set to ${channel}; \`simon update\` will pick up a newer ${channel} build once one is published.`),
+    );
     return;
   }
 

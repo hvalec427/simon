@@ -3,6 +3,7 @@ import { spinner } from '../utils/prompt.js';
 import {
   Channel,
   changelogSince,
+  compareVersions,
   currentVersion,
   latestForChannel,
   loadChannel,
@@ -33,13 +34,17 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
     process.exit(1);
   }
 
-  const upToDate = current !== 'unknown' && current === latest.version;
+  const cmp = current === 'unknown' ? 1 : compareVersions(latest.version, current);
   console.log(`Channel:   ${chalk.cyan(channel)}`);
   console.log(`Installed: ${chalk.gray(current)}`);
-  console.log(`Latest:    ${upToDate ? chalk.gray(latest.version) : chalk.green(latest.version)}`);
+  console.log(`Latest:    ${cmp > 0 ? chalk.green(latest.version) : chalk.gray(latest.version)}`);
 
-  if (upToDate) {
+  if (cmp === 0) {
     console.log(chalk.green("\nYou're up to date."));
+    return;
+  }
+  if (cmp < 0) {
+    console.log(chalk.yellow(`\nThe latest ${channel} build is older than your installed version — nothing newer to install.`));
     return;
   }
 
