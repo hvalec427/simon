@@ -1,5 +1,11 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
-import { compareVersions, latestForChannel } from '../src/utils/update';
+import { describe, it, expect, vi, afterEach, type Mock } from 'vitest';
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'fs';
+import { tmpdir } from 'os';
+import path from 'path';
+import { execSync } from 'child_process';
+import { compareVersions, installTarget, latestForChannel, needsSudo } from '../src/utils/update';
+
+vi.mock('child_process', () => ({ execSync: vi.fn(() => '') }));
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -61,5 +67,46 @@ describe('latestForChannel', () => {
   it('throws when no nightly exists', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [{ tag_name: 'v2.2.0', prerelease: false }] })));
     await expect(latestForChannel('nightly')).rejects.toThrow();
+  });
+});
+
+describe('needsSudo', () => {
+  it('is false when the target directory is writable', () => {
+    const dir = mkdtempSync(path.join(tmpdir(), 'simon-'));
+    expect(needsSudo(path.join(dir, 'simon'))).toBe(false);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('is true when the directory is missing or not writable', () => {
+    expect(needsSudo('/no/such/dir/simon')).toBe(true);
+  });
+});
+
+describe('installTarget', () => {
+  const orig = process.execPath;
+  afterEach(() => {
+    process.execPath = orig;
+  });
+
+  it('targets the running simon binary, resolving symlinks', () => {
+    const dir = realpathSync(mkdtempSync(path.join(tmpdir(), 'simon-')));
+    const bin = path.join(dir, 'simon');
+    writeFileSync(bin, '#!/bin/sh\n');
+    process.execPath = bin;
+    expect(installTarget()).toBe(bin);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('keeps the exec path when it cannot be resolved', () => {
+    process.execPath = '/nope/simon';
+    expect(installTarget()).toBe('/nope/simon');
+  });
+
+  it('falls back to the default path under node with no simon on PATH', () => {
+    (execSync as unknown as Mock).mockImplementationOnce(() => {
+      throw new Error('not found');
+    });
+    process.execPath = '/usr/bin/node';
+    expect(installTarget()).toBe('/usr/local/bin/simon');
   });
 });
