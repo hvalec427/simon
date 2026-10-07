@@ -948,8 +948,11 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
                 view.detail_scroll = view.detail_scroll.saturating_sub(1);
                 view.detail_hit = None;
             } else {
+                // Start from the row actually shown (the bottom while following),
+                // not the stale sel=0, so the first `k` steps up by one.
+                let cur = if view.follow { n.saturating_sub(1) } else { view.sel[ti] };
                 view.follow = false;
-                view.sel[ti] = view.sel[ti].saturating_sub(1);
+                view.sel[ti] = cur.saturating_sub(1);
             }
         }
         KeyCode::Down | KeyCode::Char('j') => {
@@ -957,19 +960,22 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
                 view.detail_scroll += 1;
                 view.detail_hit = None;
             } else {
-                let next = (view.sel[ti] + 1).min(n.saturating_sub(1));
-                if next >= n.saturating_sub(1) {
-                    view.follow = true;
-                }
+                let cur = if view.follow { n.saturating_sub(1) } else { view.sel[ti] };
+                let next = (cur + 1).min(n.saturating_sub(1));
+                view.follow = next >= n.saturating_sub(1);
                 view.sel[ti] = next;
             }
         }
         KeyCode::PageUp => {
+            let cur = if view.follow { n.saturating_sub(1) } else { view.sel[ti] };
             view.follow = false;
-            view.sel[ti] = view.sel[ti].saturating_sub(h);
+            view.sel[ti] = cur.saturating_sub(h);
         }
         KeyCode::PageDown => {
-            view.sel[ti] = (view.sel[ti] + h).min(n.saturating_sub(1));
+            let cur = if view.follow { n.saturating_sub(1) } else { view.sel[ti] };
+            let next = (cur + h).min(n.saturating_sub(1));
+            view.follow = next >= n.saturating_sub(1);
+            view.sel[ti] = next;
         }
         KeyCode::Char('g') => {
             view.follow = false;
