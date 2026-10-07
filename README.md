@@ -1,5 +1,18 @@
 # simon
 
+This repo is a **monorepo** (a Cargo workspace under [`rust/`](rust)) of small, composable macOS dev tools:
+
+| Tool | What it is | Status |
+|---|---|---|
+| **simon** | CLI for managing iOS simulators, Android emulators, and physical devices (boot, stop, wipe, logs, deep links, push). | Installed via the script below; self-updates. |
+| **metroctl** | A single-window React Native dashboard (Metro + build/run + JS logs/network/perf), built on simon. See [docs/rn.md](docs/rn.md). | Build from source for now — see [metroctl](#metroctl). |
+
+simon is the core and can be used entirely on its own; metroctl depends on it.
+
+---
+
+## simon
+
 A CLI for managing both real devices and iOS simulators / Android emulators — boot, stop, wipe, stream logs, open deep links, and send test push notifications, all from the terminal. No more opening Xcode or Android Studio just to boot a simulator.
 
 Built entirely with AI (Claude).
@@ -70,3 +83,41 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 - **OS**: macOS (Apple Silicon or Intel)
 - **iOS**: Xcode installed
 - **Android**: Android SDK (`ANDROID_HOME` set, or SDK at `~/Library/Android/sdk`)
+
+---
+
+## metroctl
+
+A companion tool that runs a whole React Native project from one terminal window —
+start/drive Metro, boot simulators/emulators, build & run the app, open deep links,
+and watch JS logs/network/perf — all built on top of simon. Full guide:
+[docs/rn.md](docs/rn.md).
+
+It isn't in the installer yet; build it from the workspace:
+
+```sh
+cd rust
+cargo install --path metroctl     # puts `metroctl` on your PATH
+```
+
+Then, from inside a React Native project:
+
+```sh
+metroctl init     # register the project (writes ~/.config/simon/rn.json)
+metroctl          # open the dashboard
+metroctl logs     # just the RN JS log viewer
+```
+
+Or run it without installing: `cargo run -p metroctl -- <args>`.
+
+## Repo layout
+
+```
+rust/
+  Cargo.toml      # workspace
+  simon/          # device-management library + the `simon` CLI
+  metroctl/       # the metroctl binary (depends on simon)
+```
+
+Build everything with `cargo build` in `rust/`; build one tool with
+`cargo build -p simon` / `-p metroctl`.
