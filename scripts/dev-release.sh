@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
-# Build a "dev" build from the current develop commit and publish it to a single
-# rolling prerelease tagged `dev` (binaries overwritten each push). No changelog,
-# no per-commit release — just the bleeding edge for `simon update --dev`.
+# Build a "dev" build from the current develop commit and publish it to the
+# `dev-dist` branch — NOT a GitHub release. The binaries are served to
+# `simon update --dev` over raw.githubusercontent. No release, no tag, no
+# changelog; the branch is replaced (single parentless commit) each push so
+# nothing accumulates.
 set -euo pipefail
 
 REPO="hvalec427/simon"
@@ -25,18 +27,21 @@ npm run bundle
 npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64
 npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
 
-NOTES="Rolling dev build — the latest \`develop\` commit, rebuilt on every push. No changelog; see the nightly or stable releases for notes. The version (in the title) carries a build timestamp so \`simon update --dev\` can tell builds apart."
+# Publish to dev-dist via git plumbing: a single parentless commit holding just
+# the two binaries and a VERSION file, force-pushed. No merge into history, so
+# old build blobs become unreferenced and get GC'd.
+printf '%s\n' "${VERSION}" > VERSION
+GIT_INDEX_FILE="$(mktemp)"
+export GIT_INDEX_FILE
+BLOB_ARM=$(git hash-object -w simon-darwin-arm64)
+BLOB_X64=$(git hash-object -w simon-darwin-x64)
+BLOB_VER=$(git hash-object -w VERSION)
+git update-index --add --cacheinfo 100755,"${BLOB_ARM}",simon-darwin-arm64
+git update-index --add --cacheinfo 100755,"${BLOB_X64}",simon-darwin-x64
+git update-index --add --cacheinfo 100644,"${BLOB_VER}",VERSION
+TREE=$(git write-tree)
+COMMIT=$(git commit-tree "${TREE}" -m "dev build ${VERSION}")
+unset GIT_INDEX_FILE
+git push -f origin "${COMMIT}:refs/heads/dev-dist"
 
-# The version lives in the release title; the tag stays `dev` so the download URL
-# is stable and the assets are just clobbered.
-if gh release view dev >/dev/null 2>&1; then
-  gh release edit dev --title "${VERSION}" --prerelease --notes "${NOTES}"
-  gh release upload dev simon-darwin-arm64 simon-darwin-x64 --clobber
-else
-  gh release create dev \
-    --prerelease \
-    --target "$(git rev-parse HEAD)" \
-    --title "${VERSION}" \
-    --notes "${NOTES}" \
-    simon-darwin-arm64 simon-darwin-x64
-fi
+echo "Published dev ${VERSION} to the dev-dist branch."

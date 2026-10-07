@@ -47,12 +47,13 @@ interface Release {
 // prerelease. Dev = the single rolling "dev" prerelease (version in its title).
 export async function latestForChannel(channel: Channel): Promise<{ version: string; tag: string }> {
   if (channel === 'dev') {
-    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/dev`, { headers: GH_HEADERS });
+    // Dev builds live on the `dev-dist` branch (no release); the current version
+    // is a plain VERSION file there, served via raw.githubusercontent.
+    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/dev-dist/VERSION`, { cache: 'no-store' } as RequestInit);
     if (!res.ok) throw new Error('No dev build has been published yet.');
-    const data = (await res.json()) as { name?: string; tag_name?: string };
-    const version = (data.name || data.tag_name || '').replace(/^v/, '');
+    const version = (await res.text()).trim().replace(/^v/, '');
     if (!version) throw new Error('Could not read the dev build version.');
-    return { version, tag: 'dev' };
+    return { version, tag: 'dev-dist' };
   }
 
   if (channel === 'stable') {
@@ -145,9 +146,16 @@ function assetName(): string {
   return process.arch === 'arm64' ? 'simon-darwin-arm64' : 'simon-darwin-x64';
 }
 
+// Dev is served from the dev-dist branch (no release); everything else from the
+// release's assets.
+function assetUrl(tag: string): string {
+  return tag === 'dev-dist'
+    ? `https://raw.githubusercontent.com/${REPO}/dev-dist/${assetName()}`
+    : `https://github.com/${REPO}/releases/download/${tag}/${assetName()}`;
+}
+
 export async function downloadBinary(tag: string): Promise<string> {
-  const url = `https://github.com/${REPO}/releases/download/${tag}/${assetName()}`;
-  const res = await fetch(url);
+  const res = await fetch(assetUrl(tag));
   if (!res.ok) throw new Error(`Download failed: ${res.status} ${res.statusText}`);
   const tmp = '/tmp/simon-update';
   writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));

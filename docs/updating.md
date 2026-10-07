@@ -15,7 +15,7 @@ simon self-updates in place (over the binary you're running). It only uses `sudo
 
 - **stable** (default) — tagged releases from `master`, with full changelogs.
 - **nightly** — a dated prerelease built from `develop` once a day (with a changelog), skipped on days with no code changes.
-- **dev** — the bleeding edge: a single **rolling** prerelease rebuilt on **every** `develop` commit. No changelog and no per-commit release — just the newest build. The version carries a build timestamp so updates are detectable.
+- **dev** — the bleeding edge: rebuilt on **every** `develop` commit. It's **not** a GitHub release at all — the binaries live on the `dev-dist` branch and are fetched over `raw.githubusercontent.com`, so there's no release, tag, or changelog. The version carries a build timestamp so updates are still detectable.
 
 The channel is remembered per machine, so plain `simon update` stays on whichever you picked:
 

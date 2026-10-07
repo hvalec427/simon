@@ -81,12 +81,12 @@ describe('latestForChannel', () => {
     await expect(latestForChannel('nightly')).rejects.toThrow();
   });
 
-  it('dev reads the version from the rolling release title', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: '2.17.0-dev.20261007120500', tag_name: 'dev' }) })));
-    expect(await latestForChannel('dev')).toEqual({ version: '2.17.0-dev.20261007120500', tag: 'dev' });
+  it('dev reads the version from the dev-dist VERSION file', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, text: async () => '2.17.0-dev.20261007120500\n' })));
+    expect(await latestForChannel('dev')).toEqual({ version: '2.17.0-dev.20261007120500', tag: 'dev-dist' });
   });
 
-  it('dev throws when no rolling build exists', async () => {
+  it('dev throws when no dev build exists', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
     await expect(latestForChannel('dev')).rejects.toThrow();
   });
