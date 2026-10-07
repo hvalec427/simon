@@ -9,6 +9,8 @@ mod commands;
 mod devices;
 mod goios;
 mod ios;
+mod push;
+mod pushconfig;
 mod update;
 
 use clap::{Parser, Subcommand};
@@ -106,6 +108,28 @@ enum Command {
         #[arg(short, long)]
         reset: bool,
     },
+    /// Send a push to an iOS simulator, or a real device via --token (FCM/APNs)
+    Push {
+        payload: Option<String>,
+        /// Target a specific iOS simulator by name
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "")]
+        ios: Option<String>,
+        /// App bundle id (simulator; if not set in the payload)
+        #[arg(short, long)]
+        bundle_id: Option<String>,
+        /// Print an example payload (use with --fcm for the FCM shape)
+        #[arg(short, long)]
+        template: bool,
+        /// Send to a real device with this push token
+        #[arg(long)]
+        token: Option<String>,
+        /// Use FCM
+        #[arg(long)]
+        fcm: bool,
+        /// Use APNs
+        #[arg(long)]
+        apns: bool,
+    },
     /// Manage the iOS developer tunnel (start | stop | status)
     Tunnel { action: Option<String> },
     /// Check your environment for the required tooling
@@ -149,6 +173,9 @@ fn main() {
         }
         Command::Location { coords, name, ios, android, reset } => {
             commands::location::run(coords, name, ios, android, reset)
+        }
+        Command::Push { payload, ios, bundle_id, template, token, fcm, apns } => {
+            commands::push::run(payload, ios, bundle_id, template, token, fcm, apns)
         }
         Command::Tunnel { action } => commands::tunnel::run(action),
         Command::Doctor => commands::doctor::run(),
