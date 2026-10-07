@@ -11,6 +11,26 @@ simon rn          # open the dashboard for the current project
 simon rn config   # print the config file path
 ```
 
+## Setup
+
+1. From your project root, register it:
+   ```sh
+   cd ~/dev/my-rn-app
+   simon rn init          # adds this project to ~/.config/simon/rn.json
+   ```
+   `init` detects your package manager and prints the commands it will run, so for
+   a standard project you're already done.
+2. (Optional) Open the config to customize — `simon rn config` prints its path:
+   ```sh
+   $EDITOR "$(simon rn config | head -1)"
+   ```
+   See the [field reference](#field-reference) below. A minimal entry is just a
+   `name` and `root`; everything else has a default.
+3. From anywhere inside the project, launch the dashboard:
+   ```sh
+   simon rn
+   ```
+
 ## Config
 
 Projects live in `~/.config/simon/rn.json`, a registry keyed by repo root. `simon
@@ -54,6 +74,24 @@ so Metro and your builds use the same port. It defaults to `8081`. (Set
 **Which device?** You don't pin a simulator/emulator in config — you pick one live
 from the dashboard's Devices pane (select + `b` to boot). `i` / `a` just run the
 build command against whatever's booted.
+
+### Field reference
+
+| Field | Required | Default | Purpose |
+|---|---|---|---|
+| `name` | yes | — | Display name for the project. |
+| `root` | yes | — | Absolute repo path; simon picks the project whose `root` is a prefix of your cwd (longest match wins). `rn init` stores the canonical path. |
+| `packageManager` | no | auto | `npm` \| `yarn` \| `pnpm`; detected from the lockfile when omitted. Drives the default commands. |
+| `metro.command` | no | `<pm> start` | Command to start Metro. |
+| `metro.port` | no | `8081` | Metro port. Used for the log feed **and** exported as `RCT_METRO_PORT` to every command — set it only here. |
+| `ios.command` | no | `<pm> run ios` / `<pm> ios` | Build & run command for iOS. |
+| `ios.bundleId` | no | — | App bundle id; when set, `o` delivers the link straight to the app on a **physical** iPhone instead of Safari. |
+| `android.command` | no | `<pm> run android` / `<pm> android` | Build & run command for Android. |
+| `android.bundleId` | no | — | Application id; when set, `o` routes the link to that package instead of a browser/chooser. |
+| `openLink` | no | — | A universal/deep link that opens the app; `o` fires it at the selected device. |
+| `env` | no | `{}` | Extra environment variables merged into every command simon spawns. |
+
+Only `name` and `root` are mandatory — and `rn init` fills both in for you.
 
 ## The dashboard
 
