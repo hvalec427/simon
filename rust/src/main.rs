@@ -11,6 +11,8 @@ mod goios;
 mod ios;
 mod push;
 mod pushconfig;
+mod rn;
+mod rntui;
 mod update;
 
 use clap::{Parser, Subcommand};
@@ -45,6 +47,29 @@ enum Command {
     },
     /// Show currently running simulators and emulators
     Running,
+    /// Stream logs from a running device (or React Native JS logs with --rn)
+    Logs {
+        name: Option<String>,
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "")]
+        ios: Option<String>,
+        #[arg(short, long, num_args = 0..=1, default_missing_value = "")]
+        android: Option<String>,
+        /// Filter expression (predicate for iOS, regex for Android)
+        #[arg(short, long)]
+        filter: Option<String>,
+        /// Show only this app's logs (process/app name)
+        #[arg(long)]
+        app: Option<String>,
+        /// Stream React Native JS console + network from Metro (CDP)
+        #[arg(long)]
+        rn: bool,
+        /// Metro port for --rn (default 8081)
+        #[arg(long)]
+        port: Option<u16>,
+        /// Print the Metro inspector WebSocket URL(s) for --rn targets and exit
+        #[arg(long = "print-ws")]
+        print_ws: bool,
+    },
     /// Launch a simulator or emulator (picks from a list if no flag/name given)
     Launch {
         name: Option<String>,
@@ -164,6 +189,9 @@ fn main() {
         Command::List { ios, android } => commands::list::run(ios, android),
         Command::Create { ios, android } => commands::create::run(ios, android),
         Command::Running => commands::running::run(),
+        Command::Logs { name, ios, android, filter, app, rn, port, print_ws } => {
+            commands::logs::run(name, ios, android, filter, app, rn, port, print_ws)
+        }
         Command::Launch { ios, android, name } => commands::launch::run(ios, android, name),
         Command::Stop { ios, android, name } => commands::stop::run(ios, android, name),
         Command::Delete { ios, android, name } => commands::delete::run(ios, android, name),
