@@ -336,10 +336,10 @@ export function renderFrame(s: FrameState): string {
     foot = ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · live JS-thread FPS + heap · R reload · r reconnect · q quit`;
   else if (s.detail && s.maximized)
     foot =
-      ` ⏎/esc close · z split · jk/JK scroll · g/G · / search${s.search ? ' · n/N' : ''}` +
+      ` ⏎ close · z split · jk/JK scroll · g/G · / search${s.search ? ' · n/N' : ''}` +
       ` · y copy${isLogs ? '' : ' · c curl'} · q quit`;
   else if (s.detail)
-    foot = ` ⏎/esc close · z max · jk list · JK scroll · / search${s.search ? ' · n/N' : ''} · y copy · c clear · q quit`;
+    foot = ` ⏎ close · z max · jk list · JK scroll · / search${s.search ? ' · n/N' : ''} · y copy · c clear · q quit`;
   else
     foot =
       ` [ ] tabs${hasDeviceBar ? ' · 1-9 dev' : ''} · / search${s.search ? ' · n/N' : ''} · f filter · ⏎ preview · z max · y copy` +
@@ -443,6 +443,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let follow = true;
   let detail = false;
   let maximized = false;
+  let openedByMaximize = false; // pane was opened by `z` from the list (closes fully on un-maximize)
   let detailScroll = 0;
   let detailHit = -1; // last search-matched detail line (for n/N + context offset)
   let detailLines: string[] | null = null;
@@ -603,6 +604,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   function closeDetail(): void {
     detail = false;
     maximized = false;
+    openedByMaximize = false;
     detailLines = null;
     detailLoading = false;
     detailHit = -1;
@@ -822,9 +824,17 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === 'n') detail ? jumpDetail(1) : jump(1);
     else if (str === 'N') detail ? jumpDetail(-1) : jump(-1);
     else if (str === 'z') {
-      // Toggle a full-width (maximized) preview; open one if none is up.
-      if (!detail) openDetail();
-      maximized = !maximized;
+      // Toggle a full-width (maximized) preview.
+      if (!detail) {
+        openDetail();
+        maximized = true;
+        openedByMaximize = true; // opened from the list → un-maximizing closes it
+      } else if (maximized) {
+        maximized = false;
+        if (openedByMaximize) closeDetail(); // never opened a split, so return to the list
+      } else {
+        maximized = true; // was a split → just grow it
+      }
     } else if (str === 'p') clearOnRestart = !clearOnRestart;
     else if (str === 'y') return copySelection();
     else if (str === 'e' && tab === 'network') errorsOnly = !errorsOnly;
@@ -839,7 +849,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
     } else if (str === 'r') client.reconnectNow();
     else if (str === 'R') {
       if (activeKey) client.reloadApp(activeKey);
-    } else if (key.name === 'return' || key.name === 'escape') {
+    } else if (key.name === 'return') {
       detail ? closeDetail() : openDetail();
     } else if (previewMode) {
       // ── preview mode: keys drive the maximized pane ───────────────────────
