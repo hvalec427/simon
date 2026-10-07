@@ -47,13 +47,14 @@ interface Release {
 // prerelease. Dev = the single rolling "dev" prerelease (version in its title).
 export async function latestForChannel(channel: Channel): Promise<{ version: string; tag: string }> {
   if (channel === 'dev') {
-    // Dev builds live on the `dev-dist` branch (no release); the current version
-    // is a plain VERSION file there, served via raw.githubusercontent.
-    const res = await fetch(`https://raw.githubusercontent.com/${REPO}/dev-dist/VERSION`, { cache: 'no-store' } as RequestInit);
+    // Dev is a single rolling prerelease tagged `dev`; its version lives in the
+    // release title (the tag never changes so the download URL stays stable).
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/dev`, { headers: GH_HEADERS });
     if (!res.ok) throw new Error('No dev build has been published yet.');
-    const version = (await res.text()).trim().replace(/^v/, '');
+    const data = (await res.json()) as { name?: string; tag_name?: string };
+    const version = (data.name || data.tag_name || '').replace(/^v/, '');
     if (!version) throw new Error('Could not read the dev build version.');
-    return { version, tag: 'dev-dist' };
+    return { version, tag: 'dev' };
   }
 
   if (channel === 'stable') {
@@ -146,16 +147,8 @@ function assetName(): string {
   return process.arch === 'arm64' ? 'simon-darwin-arm64' : 'simon-darwin-x64';
 }
 
-// Dev is served from the dev-dist branch (no release); everything else from the
-// release's assets.
-function assetUrl(tag: string): string {
-  return tag === 'dev-dist'
-    ? `https://raw.githubusercontent.com/${REPO}/dev-dist/${assetName()}`
-    : `https://github.com/${REPO}/releases/download/${tag}/${assetName()}`;
-}
-
 export async function downloadBinary(tag: string): Promise<string> {
-  const res = await fetch(assetUrl(tag));
+  const res = await fetch(`https://github.com/${REPO}/releases/download/${tag}/${assetName()}`);
   if (!res.ok) throw new Error(`Download failed: ${res.status} ${res.statusText}`);
   const tmp = '/tmp/simon-update';
   writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
