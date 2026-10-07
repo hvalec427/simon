@@ -348,7 +348,7 @@ describe('toCurl', () => {
       reqHeaders: { 'content-type': 'application/json' },
       reqBody: '{"a":1}',
     });
-    expect(out).toContain(`curl -i -X POST 'https://api/x'`);
+    expect(out).toContain(`curl -X POST 'https://api/x'`);
     expect(out).toContain(`-H 'content-type: application/json'`);
     expect(out).toContain(`--data '{"a":1}'`);
   });
