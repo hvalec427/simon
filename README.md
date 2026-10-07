@@ -33,6 +33,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon running` | Show what's currently running |
 | `simon open-link <url>` | Open a deep link on a running device |
 | `simon logs` | Stream logs from a running device |
+| `simon rn` | React Native project dashboard (Metro, build/run, logs) in one window |
 | `simon location <lat,lon>` | Set a simulated GPS location |
 | `simon push <payload>` | Send a push to a simulator, or a real device with `--token` |
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel |
@@ -59,6 +60,7 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 ## Guides
 
 - [Logs](docs/logs.md) — native logs and the interactive React Native viewer (`logs --rn`)
+- [RN dashboard](docs/rn.md) — run a whole React Native project from one window (`rn`)
 - [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
