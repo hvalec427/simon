@@ -1,4 +1,4 @@
-# React Native dashboard (`simon rn`)
+# React Native dashboard (`metroctl`)
 
 Run and manage a whole React Native project from a single terminal window: start
 and drive Metro, boot simulators/emulators, build & run the app on them, forward
@@ -6,9 +6,9 @@ Metro's interactive keys (`r`/`d`/`j`…), and watch the JS logs / network / per
 all at once.
 
 ```sh
-simon rn init     # register the current directory as a project
-simon rn          # open the dashboard for the current project
-simon rn config   # print the config file path
+metroctl init     # register the current directory as a project
+metroctl          # open the dashboard for the current project
+metroctl config   # print the config file path
 ```
 
 ## Setup
@@ -16,28 +16,28 @@ simon rn config   # print the config file path
 1. From your project root, register it:
    ```sh
    cd ~/dev/my-rn-app
-   simon rn init          # adds this project to ~/.config/simon/rn.json
+   metroctl init          # adds this project to ~/.config/simon/rn.json
    ```
    `init` detects your package manager and prints the commands it will run, so for
    a standard project you're already done.
-2. (Optional) Open the config to customize — `simon rn config` prints its path:
+2. (Optional) Open the config to customize — `metroctl config` prints its path:
    ```sh
-   $EDITOR "$(simon rn config | head -1)"
+   $EDITOR "$(metroctl config | head -1)"
    ```
    See the [field reference](#field-reference) below. A minimal entry is just a
    `name` and `root`; everything else has a default.
 3. From anywhere inside the project, launch the dashboard:
    ```sh
-   simon rn
+   metroctl
    ```
 
 ## Config
 
-Projects live in `~/.config/simon/rn.json`, a registry keyed by repo root. `simon
-rn` picks the project whose `root` is a prefix of your current directory, so you
-just `cd` into a repo and run `simon rn`.
+Projects live in `~/.config/simon/rn.json`, a registry keyed by repo root.
+`metroctl` picks the project whose `root` is a prefix of your current directory,
+so you just `cd` into a repo and run `metroctl`.
 
-`simon rn init` scaffolds a minimal entry; everything else falls back to sensible
+`metroctl init` scaffolds a minimal entry; everything else falls back to sensible
 defaults derived from your package manager (detected from the lockfile). A full
 entry looks like:
 
@@ -104,7 +104,7 @@ Three tiled panes plus a status bar:
   is set, each running device also shows whether the app is installed (`app✓`/
   `app✗`) and whether it's in the foreground (`▶fg`). (iOS can't report these over
   the available tooling, so they're Android-only.)
-- **JS Logs / Network / Perf** — the full `logs --rn` viewer embedded (see
+- **JS Logs / Network / Perf** — the full `metroctl logs` viewer embedded (see
   [logs](logs.md) for its keys).
 
 ### Keys

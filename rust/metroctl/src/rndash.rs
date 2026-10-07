@@ -6,12 +6,12 @@
 //! reload/dev-menu, quit). The Metro PTY takes raw-key passthrough in input mode,
 //! so `r`/`d`/`j` and anything else Metro supports work as in a normal terminal.
 
-use crate::devices::{get_all_installed, get_all_running, InstalledDevice, Platform, RunningDevice};
 use crate::proc::PtyProcess;
 use crate::rnclient::{ConnCmd, RnClient};
 use crate::rnconfig::{PackageManager, ProjectConfig};
 use crate::rnview::RnView;
-use crate::{android, ios};
+use simon::devices::{get_all_installed, get_all_running, InstalledDevice, Platform, RunningDevice};
+use simon::{android, ios};
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;

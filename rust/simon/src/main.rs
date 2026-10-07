@@ -3,24 +3,8 @@
 //! Rust port, in progress. Commands are being migrated from the TypeScript
 //! implementation one slice at a time; `todo!`-style stubs mark what's pending.
 
-mod android;
-mod androidmock;
-mod commands;
-mod devices;
-mod goios;
-mod ios;
-mod proc;
-mod push;
-mod pushconfig;
-mod rn;
-mod rnclient;
-mod rnconfig;
-mod rndash;
-mod rntui;
-mod rnview;
-mod update;
-
 use clap::{Parser, Subcommand};
+use simon::commands;
 
 #[derive(Parser)]
 #[command(name = "simon", version, about = "Manage iOS simulators and Android emulators")]
@@ -52,7 +36,7 @@ enum Command {
     },
     /// Show currently running simulators and emulators
     Running,
-    /// Stream logs from a running device (or React Native JS logs with --rn)
+    /// Stream logs from a running device (React Native JS logs: use `metroctl logs`)
     Logs {
         name: Option<String>,
         #[arg(short, long, num_args = 0..=1, default_missing_value = "")]
@@ -65,15 +49,6 @@ enum Command {
         /// Show only this app's logs (process/app name)
         #[arg(long)]
         app: Option<String>,
-        /// Stream React Native JS console + network from Metro (CDP)
-        #[arg(long)]
-        rn: bool,
-        /// Metro port for --rn (default 8081)
-        #[arg(long)]
-        port: Option<u16>,
-        /// Print the Metro inspector WebSocket URL(s) for --rn targets and exit
-        #[arg(long = "print-ws")]
-        print_ws: bool,
     },
     /// Launch a simulator or emulator (picks from a list if no flag/name given)
     Launch {
@@ -160,11 +135,6 @@ enum Command {
         #[arg(long)]
         apns: bool,
     },
-    /// Manage and run a React Native project from a single-window dashboard
-    Rn {
-        #[command(subcommand)]
-        action: Option<RnAction>,
-    },
     /// Manage the iOS developer tunnel (start | stop | status)
     Tunnel { action: Option<String> },
     /// Check your environment for the required tooling
@@ -193,22 +163,14 @@ enum Command {
     },
 }
 
-#[derive(Subcommand)]
-enum RnAction {
-    /// Register (or update) the current directory as a React Native project
-    Init,
-    /// Print the path to the RN config file
-    Config,
-}
-
 fn main() {
     let cli = Cli::parse();
     match cli.command {
         Command::List { ios, android } => commands::list::run(ios, android),
         Command::Create { ios, android } => commands::create::run(ios, android),
         Command::Running => commands::running::run(),
-        Command::Logs { name, ios, android, filter, app, rn, port, print_ws } => {
-            commands::logs::run(name, ios, android, filter, app, rn, port, print_ws)
+        Command::Logs { name, ios, android, filter, app } => {
+            commands::logs::run(name, ios, android, filter, app)
         }
         Command::Launch { ios, android, name } => commands::launch::run(ios, android, name),
         Command::Stop { ios, android, name } => commands::stop::run(ios, android, name),
@@ -223,11 +185,6 @@ fn main() {
         Command::Push { payload, ios, bundle_id, template, token, fcm, apns } => {
             commands::push::run(payload, ios, bundle_id, template, token, fcm, apns)
         }
-        Command::Rn { action } => match action {
-            Some(RnAction::Init) => commands::rn::init(),
-            Some(RnAction::Config) => commands::rn::print_config_path(),
-            None => commands::rn::launch(),
-        },
         Command::Tunnel { action } => commands::tunnel::run(action),
         Command::Doctor => commands::doctor::run(),
         Command::CheckUpdate { stable, nightly, dev } => commands::check_update::run(stable, nightly, dev),

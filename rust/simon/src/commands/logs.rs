@@ -1,41 +1,10 @@
 use crate::android::find_bin;
 use crate::devices::{pick_running, resolve_target, RunningDevice};
 use crate::goios::{ensure_go_ios, ensure_tunnel};
-use crate::rn;
-use std::io::IsTerminal;
 use std::process::Command;
 
-#[allow(clippy::too_many_arguments)]
-pub fn run(
-    name_arg: Option<String>,
-    ios_flag: Option<String>,
-    android_flag: Option<String>,
-    filter: Option<String>,
-    app: Option<String>,
-    rn_mode: bool,
-    port: Option<u16>,
-    print_ws: bool,
-) {
+pub fn run(name_arg: Option<String>, ios_flag: Option<String>, android_flag: Option<String>, filter: Option<String>, app: Option<String>) {
     let (device_filter, name) = resolve_target(&ios_flag, &android_flag, name_arg);
-
-    if rn_mode {
-        let port = port.unwrap_or(8081);
-        if print_ws {
-            rn::print_inspector_ws(port, name.as_deref());
-            return;
-        }
-        // Interactive TUI in a terminal; plain line stream when piped/redirected.
-        let result = if std::io::stdout().is_terminal() {
-            crate::rntui::run(port, name.as_deref())
-        } else {
-            rn::stream_plain(port, name.as_deref())
-        };
-        if let Err(e) = result {
-            eprintln!("{e}");
-            std::process::exit(1);
-        }
-        return;
-    }
 
     let device = match pick_running("Select a device to stream logs from:", device_filter, name.as_deref(), false) {
         Ok(d) => d,

@@ -9,13 +9,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 # Inline the version so the binary reports it (env!("CARGO_PKG_VERSION")).
-sed -i.bak "s/^version = .*/version = \"${VERSION}\"/" rust/Cargo.toml
-rm -f rust/Cargo.toml.bak
+sed -i.bak "s/^version = .*/version = \"${VERSION}\"/" rust/simon/Cargo.toml
+rm -f rust/simon/Cargo.toml.bak
 
 rustup target add aarch64-apple-darwin x86_64-apple-darwin >/dev/null 2>&1 || true
 
-cargo build --release --manifest-path rust/Cargo.toml --target aarch64-apple-darwin
-cargo build --release --manifest-path rust/Cargo.toml --target x86_64-apple-darwin
+# Build just the simon binary for release (metroctl ships separately, later).
+cargo build --release --manifest-path rust/Cargo.toml -p simon --target aarch64-apple-darwin
+cargo build --release --manifest-path rust/Cargo.toml -p simon --target x86_64-apple-darwin
 
 cp rust/target/aarch64-apple-darwin/release/simon simon-darwin-arm64
 cp rust/target/x86_64-apple-darwin/release/simon simon-darwin-x64

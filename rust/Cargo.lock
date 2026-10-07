@@ -986,6 +986,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "metroctl"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "crossterm 0.28.1",
+ "inquire",
+ "portable-pty",
+ "ratatui",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "simon",
+ "tungstenite",
+ "vt100",
+]
+
+[[package]]
 name = "mio"
 version = "0.8.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1641,16 +1659,11 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "clap",
- "crossterm 0.28.1",
  "inquire",
  "jsonwebtoken",
- "portable-pty",
- "ratatui",
  "reqwest",
  "serde",
  "serde_json",
- "tungstenite",
- "vt100",
 ]
 
 [[package]]
