@@ -13,7 +13,7 @@ use crate::{android, ios};
 use anyhow::Result;
 use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 use ratatui::prelude::*;
-use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph};
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, Sender};
 use std::time::{Duration, Instant};
@@ -71,6 +71,7 @@ pub struct DashApp {
     tx: Sender<DashMsg>,
     flash: Option<(String, Instant)>,
     proc_area: Option<Rect>,
+    confirm_quit: bool,
     quit: bool,
 }
 
@@ -146,6 +147,7 @@ impl DashApp {
             tx,
             flash: None,
             proc_area: None,
+            confirm_quit: false,
             quit: false,
         }
     }
@@ -368,13 +370,21 @@ impl DashApp {
     }
 
     fn on_key(&mut self, key: KeyEvent) {
-        // Ctrl-C always quits the dashboard.
-        if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
-            self.quit = true;
+        let ctrl_c = key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL);
+
+        // Quit confirmation popup swallows all input until answered.
+        if self.confirm_quit {
+            match key.code {
+                KeyCode::Char('y') | KeyCode::Enter => self.quit = true,
+                _ if ctrl_c => self.quit = true, // Ctrl-C again = force quit
+                KeyCode::Char('n') | KeyCode::Char('q') | KeyCode::Esc => self.confirm_quit = false,
+                _ => {}
+            }
             return;
         }
 
-        // Processes input mode: forward raw keys to the active PTY; Esc exits.
+        // Processes input mode: forward raw keys to the active PTY (including
+        // Ctrl-C, so you can interrupt Metro); only Esc leaves input mode.
         if self.input_mode {
             if key.code == KeyCode::Esc {
                 self.input_mode = false;
@@ -388,6 +398,12 @@ impl DashApp {
             return;
         }
 
+        // Ctrl-C anywhere else asks before quitting.
+        if ctrl_c {
+            self.confirm_quit = true;
+            return;
+        }
+
         // Logs pane owns almost every key; the dashboard keeps only focus + quit.
         // While the viewer is mid search/filter entry, it must capture Tab too.
         if self.focus == Pane::Logs {
@@ -396,8 +412,9 @@ impl DashApp {
                 KeyCode::Tab if !capturing => self.cycle_focus(false),
                 KeyCode::BackTab if !capturing => self.cycle_focus(true),
                 _ => {
+                    // RnView returns true on q/Ctrl-C; turn that into a confirm.
                     if self.rnview.on_key(key, &self.client) {
-                        self.quit = true;
+                        self.confirm_quit = true;
                     }
                 }
             }
@@ -406,7 +423,7 @@ impl DashApp {
 
         // Processes / Devices panes.
         match key.code {
-            KeyCode::Char('q') => self.quit = true,
+            KeyCode::Char('q') => self.confirm_quit = true,
             KeyCode::Tab => self.cycle_focus(false),
             KeyCode::BackTab => self.cycle_focus(true),
             KeyCode::Char('m') => self.start_metro(),
@@ -490,6 +507,36 @@ fn render(app: &mut DashApp, frame: &mut Frame) {
     render_devices(app, frame, dev_outer);
     render_logs(app, frame, logs_outer);
     render_status(app, frame, status_area);
+
+    if app.confirm_quit {
+        render_quit_popup(frame, area);
+    }
+}
+
+fn centered(area: Rect, w: u16, h: u16) -> Rect {
+    let w = w.min(area.width);
+    let h = h.min(area.height);
+    Rect { x: area.x + (area.width - w) / 2, y: area.y + (area.height - h) / 2, width: w, height: h }
+}
+
+fn render_quit_popup(frame: &mut Frame, area: Rect) {
+    let r = centered(area, 50, 5);
+    frame.render_widget(Clear, r); // wipe whatever's underneath
+    let block = Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Yellow)).title(" Quit simon rn? ");
+    let inner = block.inner(r);
+    frame.render_widget(block, r);
+    let lines = vec![
+        Line::raw(""),
+        Line::from(Span::raw("  This stops Metro and any running builds.")),
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled("y/⏎", Style::default().fg(Color::Green)),
+            Span::raw(" quit    "),
+            Span::styled("n/esc", Style::default().fg(Color::Cyan)),
+            Span::raw(" cancel"),
+        ]),
+    ];
+    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
 fn focus_border(focused: bool) -> Style {
