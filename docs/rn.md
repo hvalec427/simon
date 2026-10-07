@@ -70,8 +70,7 @@ Anything omitted is derived:
 
 **Port in one place.** Set `metro.port` and nothing else — simon connects its log
 feed to that port *and* exports it as `RCT_METRO_PORT` into every command it runs,
-so Metro and your builds use the same port. It defaults to `8081`. (Set
-`RCT_METRO_PORT` yourself in `env` only if you want to override that.)
+so Metro and your builds use the same port. It defaults to `8081`.
 
 **Which device?** You don't pin a simulator/emulator in config — you pick one live
 from the dashboard's Devices pane (select + `b` to boot). `i` / `a` just run the
