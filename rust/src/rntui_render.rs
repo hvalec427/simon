@@ -102,7 +102,7 @@ fn perf_lines(app: &App, h: usize) -> Vec<Line<'static>> {
     out
 }
 
-fn render(app: &App, frame: &mut Frame) {
+fn render(app: &mut App, frame: &mut Frame) {
     let area = frame.area();
     let cols = area.width as usize;
     let rows = area.height as usize;
@@ -112,6 +112,9 @@ fn render(app: &App, frame: &mut Frame) {
     let has_bar = app.targets.len() > 1;
     let h = rows.saturating_sub(2 + if has_bar { 1 } else { 0 }).max(1);
     let is_logs = app.tab == Tab::Logs;
+    // Record the pane geometry so n/N wrap/scroll match what's drawn.
+    app.view_h = h;
+    app.detail_width = if app.maximized { cols } else { cols.saturating_sub(((cols as f64) * 0.45) as usize + 1) };
 
     let d = app.active.as_ref().and_then(|k| app.devices.get(k));
     let who = app.active.clone().unwrap_or_else(|| "…".into());
@@ -178,14 +181,22 @@ fn render_body(app: &App, cols: usize, h: usize, is_logs: bool, d: Option<&Devic
     let eff_sel = if app.follow { len.saturating_sub(1) } else { app.sel[app.tab_idx()].min(len.saturating_sub(1)) };
 
     if app.detail && len > 0 {
-        let dl: Vec<String> = app.detail_source().iter().flat_map(|l| wrap(l, if app.maximized { cols } else { cols.saturating_sub((cols as f64 * 0.45) as usize + 1) })).collect();
+        let dl = app.detail_wrapped();
         let d_start = app.detail_scroll.min(dl.len().saturating_sub(h));
         if app.maximized {
-            return (0..h).map(|i| match dl.get(d_start + i) { Some(l) => row_line(l, cols, Style::default(), &app.search, false), None => Line::raw("") }).collect();
+            return (0..h)
+                .map(|i| {
+                    let abs = d_start + i;
+                    match dl.get(abs) {
+                        Some(l) => row_line(l, cols, Style::default(), &app.search, Some(abs) == app.detail_hit),
+                        None => Line::raw(""),
+                    }
+                })
+                .collect();
         }
         // split: list | detail
-        let left_w = ((cols as f64) * 0.45) as usize;
-        let right_w = cols.saturating_sub(left_w + 1);
+        let right_w = app.detail_width;
+        let left_w = cols.saturating_sub(right_w + 1);
         let list_start = eff_sel.saturating_sub(h / 2).min(len.saturating_sub(h));
         return (0..h)
             .map(|i| {
@@ -199,8 +210,9 @@ fn render_body(app: &App, cols: usize, h: usize, is_logs: bool, d: Option<&Devic
                     spans.push(Span::raw(" ".repeat(left_w)));
                 }
                 spans.push(Span::styled("│", Style::default().fg(Color::DarkGray)));
-                let dline = dl.get(d_start + i).cloned().unwrap_or_default();
-                let dl_line = row_line(&dline, right_w, Style::default(), &app.search, false);
+                let abs = d_start + i;
+                let dline = dl.get(abs).cloned().unwrap_or_default();
+                let dl_line = row_line(&dline, right_w, Style::default(), &app.search, Some(abs) == app.detail_hit);
                 spans.extend(dl_line.spans);
                 Line::from(spans)
             })
@@ -278,7 +290,11 @@ fn jump(app: &mut App, dir: i32) {
 }
 
 fn jump_first(app: &mut App) {
-    if app.search.is_empty() || app.detail {
+    if app.search.is_empty() {
+        return;
+    }
+    if app.detail {
+        detail_jump_first(app);
         return;
     }
     let hits = match_indexes(app);
@@ -288,6 +304,42 @@ fn jump_first(app: &mut App) {
     let base = if app.follow { 0 } else { app.sel[app.tab_idx()] };
     app.follow = false;
     app.sel[app.tab_idx()] = hits.iter().find(|&&i| i >= base).copied().unwrap_or(hits[0]);
+}
+
+const DETAIL_CONTEXT: usize = 3;
+
+fn detail_matches(app: &App) -> Vec<usize> {
+    if app.search.is_empty() {
+        return Vec::new();
+    }
+    let n = app.search.to_lowercase();
+    app.detail_wrapped().iter().enumerate().filter(|(_, l)| l.to_lowercase().contains(&n)).map(|(i, _)| i).collect()
+}
+
+fn detail_jump(app: &mut App, dir: i32) {
+    let hits = detail_matches(app);
+    if hits.is_empty() {
+        return;
+    }
+    let base = app.detail_hit.unwrap_or(app.detail_scroll);
+    let next = if dir == 1 {
+        hits.iter().find(|&&i| i > base).copied().unwrap_or(hits[0])
+    } else {
+        hits.iter().rev().find(|&&i| i < base).copied().unwrap_or(*hits.last().unwrap())
+    };
+    app.detail_hit = Some(next);
+    app.detail_scroll = next.saturating_sub(DETAIL_CONTEXT);
+}
+
+fn detail_jump_first(app: &mut App) {
+    let hits = detail_matches(app);
+    if hits.is_empty() {
+        return;
+    }
+    let from = app.detail_hit.unwrap_or(app.detail_scroll);
+    let next = hits.iter().find(|&&i| i >= from).copied().unwrap_or(hits[0]);
+    app.detail_hit = Some(next);
+    app.detail_scroll = next.saturating_sub(DETAIL_CONTEXT);
 }
 
 fn copy_selection(app: &mut App) {
@@ -377,7 +429,8 @@ fn on_key(app: &mut App, key: KeyEvent, client: &RnClient) -> bool {
             app.mode = Mode::Search;
             app.input.clear();
             if app.detail {
-                app.detail_scroll = 0;
+                app.detail_scroll = 0; // pane search starts at the top
+                app.detail_hit = None;
             }
         }
         KeyCode::Char('f') => {
@@ -449,23 +502,25 @@ fn on_key(app: &mut App, key: KeyEvent, client: &RnClient) -> bool {
         KeyCode::Char('J') => {
             if app.detail {
                 app.detail_scroll += 1;
+                app.detail_hit = None;
             }
         }
         KeyCode::Char('K') => {
             if app.detail {
                 app.detail_scroll = app.detail_scroll.saturating_sub(1);
+                app.detail_hit = None;
             }
         }
         KeyCode::Char('n') => {
             if app.detail {
-                app.detail_scroll += 1;
+                detail_jump(app, 1);
             } else {
                 jump(app, 1);
             }
         }
         KeyCode::Char('N') => {
             if app.detail {
-                app.detail_scroll = app.detail_scroll.saturating_sub(1);
+                detail_jump(app, -1);
             } else {
                 jump(app, -1);
             }
@@ -473,6 +528,7 @@ fn on_key(app: &mut App, key: KeyEvent, client: &RnClient) -> bool {
         KeyCode::Up | KeyCode::Char('k') => {
             if app.detail && app.maximized {
                 app.detail_scroll = app.detail_scroll.saturating_sub(1);
+                app.detail_hit = None;
             } else {
                 app.follow = false;
                 app.sel[ti] = app.sel[ti].saturating_sub(1);
@@ -481,6 +537,7 @@ fn on_key(app: &mut App, key: KeyEvent, client: &RnClient) -> bool {
         KeyCode::Down | KeyCode::Char('j') => {
             if app.detail && app.maximized {
                 app.detail_scroll += 1;
+                app.detail_hit = None;
             } else {
                 let next = (app.sel[ti] + 1).min(n.saturating_sub(1));
                 if next >= n.saturating_sub(1) {

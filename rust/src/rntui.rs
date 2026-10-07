@@ -214,6 +214,9 @@ struct App {
     maximized: bool,
     opened_by_max: bool,
     detail_scroll: usize,
+    detail_hit: Option<usize>, // active match line in the pane (for n/N + current highlight)
+    detail_width: usize,       // pane width as last rendered (so n/N wrap matches)
+    view_h: usize,             // body height as last rendered
     search: String,
     filter: String,
     mode: Mode,
@@ -238,6 +241,9 @@ impl App {
             maximized: false,
             opened_by_max: false,
             detail_scroll: 0,
+            detail_hit: None,
+            detail_width: 80,
+            view_h: 20,
             search: String::new(),
             filter: String::new(),
             mode: Mode::Normal,
@@ -362,6 +368,10 @@ impl App {
         }
     }
 
+    fn detail_wrapped(&self) -> Vec<String> {
+        self.detail_source().iter().flat_map(|l| wrap(l, self.detail_width.max(1))).collect()
+    }
+
     fn detail_source(&self) -> Vec<String> {
         let d = match self.active.as_ref().and_then(|k| self.devices.get(k)) {
             Some(d) => d,
@@ -405,7 +415,7 @@ fn main_loop(app: &mut App, terminal: &mut ratatui::DefaultTerminal, client: &Rn
         while let Ok(ev) = client.rx.try_recv() {
             app.on_event(ev);
         }
-        terminal.draw(|f| render(app, f))?;
+        terminal.draw(|f| render(&mut *app, f))?;
         if event::poll(Duration::from_millis(100))? {
             if let Event::Key(k) = event::read()? {
                 if k.kind == KeyEventKind::Press && on_key(app, k, client) {
