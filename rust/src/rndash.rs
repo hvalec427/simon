@@ -271,12 +271,15 @@ impl DashApp {
         };
         let tx = self.tx.clone();
         let label = dev.label.clone();
+        let ios_bundle = self.project.ios_bundle_id().map(String::from);
+        let android_pkg = self.project.android_bundle_id().map(String::from);
         self.set_flash(format!("opening on {label}…"));
         std::thread::spawn(move || {
             let res = match target {
+                // simctl openurl routes by scheme; it has no bundle targeting.
                 OpenTarget::IosSim(udid) => ios::open_url_on_simulator(&udid, &url),
-                OpenTarget::IosPhysical(udid) => ios::open_url_on_physical_ios(&udid, &url, None, false),
-                OpenTarget::AndroidSerial(serial) => android::open_url(&serial, &url),
+                OpenTarget::IosPhysical(udid) => ios::open_url_on_physical_ios(&udid, &url, ios_bundle.as_deref(), false),
+                OpenTarget::AndroidSerial(serial) => android::open_url_with_package(&serial, &url, android_pkg.as_deref()),
             };
             let msg = match res {
                 Ok(()) => format!("opened on {label}"),

@@ -246,10 +246,18 @@ pub fn stop_emulator(serial: &str) -> anyhow::Result<()> {
 }
 
 pub fn open_url(serial: &str, url: &str) -> anyhow::Result<()> {
+    open_url_with_package(serial, url, None)
+}
+
+/// Open a URL via a VIEW intent, optionally constrained to `package` so the link
+/// is delivered straight to that app instead of a browser/chooser.
+pub fn open_url_with_package(serial: &str, url: &str, package: Option<&str>) -> anyhow::Result<()> {
     let adb = find_bin("adb");
-    let out = Command::new(&adb)
-        .args(["-s", serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url])
-        .output()?;
+    let mut args: Vec<&str> = vec!["-s", serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url];
+    if let Some(p) = package {
+        args.push(p);
+    }
+    let out = Command::new(&adb).args(&args).output()?;
     if !out.status.success() {
         anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
     }

@@ -71,11 +71,15 @@ pub struct MetroConfig {
 }
 
 /// A platform's build/run command. Which device it runs on is chosen live from
-/// the dashboard's Devices pane, not pinned here.
+/// the dashboard's Devices pane, not pinned here. `bundle_id` is the app's
+/// bundle id (iOS) / application id (Android), used to open links straight in
+/// the app rather than a browser.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct PlatformConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub command: Option<String>,
+    #[serde(rename = "bundleId", default, skip_serializing_if = "Option::is_none")]
+    pub bundle_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -108,6 +112,14 @@ impl ProjectConfig {
 
     pub fn open_link(&self) -> Option<&str> {
         self.open_link.as_deref()
+    }
+
+    pub fn ios_bundle_id(&self) -> Option<&str> {
+        self.ios.as_ref().and_then(|c| c.bundle_id.as_deref())
+    }
+
+    pub fn android_bundle_id(&self) -> Option<&str> {
+        self.android.as_ref().and_then(|c| c.bundle_id.as_deref())
     }
 
     pub fn package_manager(&self) -> PackageManager {
@@ -231,7 +243,7 @@ mod tests {
         let mut p = ProjectConfig::new("App".into(), "/tmp/app".into());
         p.package_manager = Some("yarn".into());
         p.metro = Some(MetroConfig { command: Some("yarn web-start".into()), port: Some(9000) });
-        p.ios = Some(PlatformConfig { command: None });
+        p.ios = Some(PlatformConfig { command: None, bundle_id: None });
         assert_eq!(p.metro_command(), "yarn web-start");
         assert_eq!(p.metro_port(), 9000);
         // ios.command unset → derived from the declared package manager (yarn).
