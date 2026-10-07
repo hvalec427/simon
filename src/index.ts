@@ -15,7 +15,6 @@ import { doctorCommand } from './commands/doctor.js';
 import { pushCommand } from './commands/push.js';
 import { locationCommand } from './commands/location.js';
 import { tunnelCommand } from './commands/tunnel.js';
-import { completionsCommand } from './commands/completions.js';
 
 const program = new Command();
 
@@ -140,11 +139,6 @@ program
   .option('--dev', 'Switch to and update from the dev channel (rolling build from every develop commit)')
   .option('--force', 'Install the channel\'s latest even if it is the same or an older version')
   .action(updateCommand);
-
-program
-  .command('completions [shell]')
-  .description('Print a shell completion script (zsh)')
-  .action(shell => completionsCommand(shell, program));
 
 process.on('uncaughtException', err => {
   if ((err as NodeJS.ErrnoException).name === 'ExitPromptError') process.exit(0);

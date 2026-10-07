@@ -1,4 +1,4 @@
-# Updating & completions
+# Updating
 
 ## Update
 
@@ -28,10 +28,3 @@ simon check-update --dev      # peek at the latest dev build without installing
 ```
 
 Each stable/nightly release lists its own changelog; nightlies also include a one-line install command for that exact build. Dev builds have neither — use nightly or stable if you want notes.
-
-## Shell completions (zsh)
-
-```sh
-simon completions zsh > ~/.simon-completion.zsh
-echo 'source ~/.simon-completion.zsh' >> ~/.zshrc   # after `autoload -U compinit && compinit`
-```
