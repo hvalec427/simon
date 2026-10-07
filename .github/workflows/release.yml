@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - master   # stable releases (on merge from develop)
+      - develop  # rolling "dev" build on every commit
   schedule:
     # Nightly from develop, once a day. Cron is UTC; 23:00 UTC ≈ midnight in
     # Slovenia (00:00 CET in winter, 01:00 CEST in summer — GitHub cron can't
@@ -58,6 +59,13 @@ jobs:
 
       - name: Test
         run: npm test
+
+      # develop push → rolling "dev" build (single prerelease, no changelog).
+      - name: Dev build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/dev-release.sh
 
       # Scheduled/manual → date-stamped nightly prerelease from develop (custom;
       # no semantic-release notes). Skips itself if there are no code changes.
