@@ -73,6 +73,33 @@ pub fn list_simulators() -> Vec<Simulator> {
     sims
 }
 
+fn simctl(args: &[&str]) -> anyhow::Result<()> {
+    let out = Command::new("xcrun").arg("simctl").args(args).output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+pub fn boot_simulator(udid: &str) -> anyhow::Result<()> {
+    // Boot may fail if it's already booted — that's fine.
+    let _ = Command::new("xcrun").args(["simctl", "boot", udid]).output();
+    let _ = Command::new("open").args(["-a", "Simulator"]).spawn();
+    Ok(())
+}
+
+pub fn shutdown_simulator(udid: &str) -> anyhow::Result<()> {
+    simctl(&["shutdown", udid])
+}
+
+pub fn delete_simulator(udid: &str) -> anyhow::Result<()> {
+    simctl(&["delete", udid])
+}
+
+pub fn erase_simulator(udid: &str) -> anyhow::Result<()> {
+    simctl(&["erase", udid])
+}
+
 pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let tmp = std::env::temp_dir().join("simon-devicectl.json");
     let status = Command::new("xcrun")

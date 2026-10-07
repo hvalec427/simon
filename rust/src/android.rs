@@ -1,8 +1,8 @@
 //! Android device discovery via the SDK's `emulator` and `adb`. Mirrors the
 //! TypeScript `utils/android.ts`.
 
-use std::path::PathBuf;
-use std::process::Command;
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
 
 #[derive(Debug, Clone)]
 pub struct RunningEmulator {
@@ -98,6 +98,79 @@ pub fn running_emulators() -> Vec<RunningEmulator> {
 
 pub fn running_avd_names() -> Vec<String> {
     running_emulators().into_iter().map(|e| e.name).collect()
+}
+
+/// Locate `avdmanager` across the SDK layouts, falling back to the bare name.
+fn find_avdmanager() -> String {
+    let sdk = sdk_root();
+    let mut candidates = vec![
+        sdk.join("cmdline-tools/latest/bin/avdmanager"),
+        sdk.join("tools/bin/avdmanager"),
+    ];
+    if let Ok(entries) = std::fs::read_dir(sdk.join("cmdline-tools")) {
+        for e in entries.flatten() {
+            candidates.push(e.path().join("bin/avdmanager"));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|p| p.exists())
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "avdmanager".to_string())
+}
+
+pub fn launch_avd(name: &str) -> anyhow::Result<()> {
+    let emulator = find_bin("emulator");
+    let dir = Path::new(&emulator).parent().map(|p| p.to_path_buf()).unwrap_or_else(|| PathBuf::from("."));
+    let sdk = sdk_root();
+    Command::new(&emulator)
+        .args(["-avd", name])
+        .current_dir(dir)
+        .env("ANDROID_HOME", &sdk)
+        .env("ANDROID_SDK_ROOT", &sdk)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()?;
+    Ok(())
+}
+
+pub fn stop_emulator(serial: &str) -> anyhow::Result<()> {
+    let adb = find_bin("adb");
+    Command::new(&adb).args(["-s", serial, "emu", "kill"]).output()?;
+    Ok(())
+}
+
+pub fn delete_avd(name: &str) -> anyhow::Result<()> {
+    let out = Command::new(find_avdmanager()).args(["delete", "avd", "-n", name]).output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// Erase an AVD's data by removing its userdata/cache images (next boot recreates them).
+pub fn wipe_avd(name: &str) -> anyhow::Result<()> {
+    let home = std::env::var("HOME").unwrap_or_default();
+    let base = PathBuf::from(&home).join(".android/avd");
+    let ini = base.join(format!("{name}.ini"));
+    let mut avd_path = base.join(format!("{name}.avd"));
+    if let Ok(contents) = std::fs::read_to_string(&ini) {
+        for line in contents.lines() {
+            if let Some(rest) = line.trim().strip_prefix("path") {
+                if let Some(v) = rest.trim_start().strip_prefix('=') {
+                    avd_path = PathBuf::from(v.trim());
+                }
+            }
+        }
+    }
+    for pattern in ["userdata-qemu.img", "userdata-qemu.img.qcow2", "cache.img", "cache.img.qcow2"] {
+        let f = avd_path.join(pattern);
+        if f.exists() {
+            std::fs::remove_file(&f).ok();
+        }
+    }
+    Ok(())
 }
 
 pub fn connected_android_devices() -> Vec<PhysicalAndroidDevice> {
