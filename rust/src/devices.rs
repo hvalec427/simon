@@ -38,6 +38,20 @@ impl RunningDevice {
         }
     }
 
+    pub fn udid(&self) -> Option<&str> {
+        match self {
+            RunningDevice::IosSim { udid, .. } | RunningDevice::IosPhysical { udid, .. } => Some(udid),
+            _ => None,
+        }
+    }
+
+    pub fn serial(&self) -> Option<&str> {
+        match self {
+            RunningDevice::AndroidEmulator { serial, .. } | RunningDevice::AndroidPhysical { serial, .. } => Some(serial),
+            _ => None,
+        }
+    }
+
     pub fn label(&self) -> String {
         match self {
             RunningDevice::IosSim { name, runtime, .. } => format!("{name}  ({runtime} · simulator)"),

@@ -100,6 +100,54 @@ pub fn erase_simulator(udid: &str) -> anyhow::Result<()> {
     simctl(&["erase", udid])
 }
 
+pub fn open_url_on_simulator(udid: &str, url: &str) -> anyhow::Result<()> {
+    simctl(&["openurl", udid, url])
+}
+
+pub fn set_sim_location(udid: &str, lat: &str, lon: &str) -> anyhow::Result<()> {
+    simctl(&["location", udid, "set", &format!("{lat},{lon}")])
+}
+
+pub fn clear_sim_location(udid: &str) -> anyhow::Result<()> {
+    simctl(&["location", udid, "clear"])
+}
+
+fn ensure_devicectl() -> anyhow::Result<()> {
+    let ok = Command::new("xcrun").args(["-f", "devicectl"]).output().map(|o| o.status.success()).unwrap_or(false);
+    if !ok {
+        anyhow::bail!(
+            "Opening deep links on a physical iOS device requires full Xcode (devicectl).\n\
+             Install Xcode, then point the tools at it:\n  sudo xcode-select -s /Applications/Xcode.app"
+        );
+    }
+    Ok(())
+}
+
+/// devicectl has no system-wide "open URL"; hand it to Safari (or directly to
+/// `bundle_id`) and let the system route the scheme. `restart` cold-relaunches
+/// via --terminate-existing; otherwise the app is warm-foregrounded.
+pub fn open_url_on_physical_ios(udid: &str, url: &str, bundle_id: Option<&str>, restart: bool) -> anyhow::Result<()> {
+    ensure_devicectl()?;
+    let target = bundle_id.unwrap_or("com.apple.mobilesafari");
+    let mut args: Vec<&str> = vec!["devicectl", "device", "process", "launch"];
+    if restart {
+        args.push("--terminate-existing");
+    }
+    args.extend(["--payload-url", url, "--device", udid, target]);
+    let out = Command::new("xcrun").args(&args).output()?;
+    if !out.status.success() {
+        let detail = String::from_utf8_lossy(&out.stderr).lines().map(|l| l.trim()).find(|l| !l.is_empty()).unwrap_or("").to_string();
+        let mut msg = format!("Failed to open the link on the device{}", if detail.is_empty() { ".".into() } else { format!(":\n  {detail}") });
+        if let Some(b) = bundle_id {
+            msg.push_str(&format!(
+                "\nCheck that \"{b}\" is the app's exact bundle id — list installed apps with:\n  xcrun devicectl device info apps --device \"{udid}\""
+            ));
+        }
+        anyhow::bail!(msg);
+    }
+    Ok(())
+}
+
 pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let tmp = std::env::temp_dir().join("simon-devicectl.json");
     let status = Command::new("xcrun")

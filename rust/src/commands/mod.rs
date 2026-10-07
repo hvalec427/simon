@@ -1,6 +1,9 @@
 pub mod delete;
 pub mod launch;
 pub mod list;
+pub mod location;
+pub mod open_link;
 pub mod running;
 pub mod stop;
+pub mod tunnel;
 pub mod wipe;

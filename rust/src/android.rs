@@ -141,6 +141,27 @@ pub fn stop_emulator(serial: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+pub fn open_url(serial: &str, url: &str) -> anyhow::Result<()> {
+    let adb = find_bin("adb");
+    let out = Command::new(&adb)
+        .args(["-s", serial, "shell", "am", "start", "-a", "android.intent.action.VIEW", "-d", url])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
+/// `adb emu geo fix` takes longitude first, then latitude.
+pub fn emu_geo_fix(serial: &str, lon: &str, lat: &str) -> anyhow::Result<()> {
+    let adb = find_bin("adb");
+    let out = Command::new(&adb).args(["-s", serial, "emu", "geo", "fix", lon, lat]).output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
 pub fn delete_avd(name: &str) -> anyhow::Result<()> {
     let out = Command::new(find_avdmanager()).args(["delete", "avd", "-n", name]).output()?;
     if !out.status.success() {
