@@ -348,9 +348,15 @@ describe('toCurl', () => {
       reqHeaders: { 'content-type': 'application/json' },
       reqBody: '{"a":1}',
     });
-    expect(out).toContain(`curl -X POST 'https://api/x'`);
+    expect(out).toContain(`curl -i -X POST 'https://api/x'`);
     expect(out).toContain(`-H 'content-type: application/json'`);
     expect(out).toContain(`--data '{"a":1}'`);
+  });
+  it('uses -I for HEAD (headers only, no body)', () => {
+    const out = toCurl({ id: 'h', method: 'HEAD', url: 'https://api/ping' });
+    expect(out).toContain(`curl -I 'https://api/ping'`);
+    expect(out).not.toContain('-X HEAD');
+    expect(out).not.toContain('--data');
   });
   it('single-quotes so GraphQL $variables are not eaten by the shell', () => {
     const out = toCurl({ id: '2', method: 'POST', url: 'u', reqBody: '{"query":"query Q($id: ID!){x}"}' });

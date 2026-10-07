@@ -97,11 +97,14 @@ function shQuote(s: string): string {
   return `'${s.replace(/'/g, `'\\''`)}'`;
 }
 
-// A copy-pasteable curl command for a captured request.
+// A copy-pasteable curl command for a captured request. Includes response
+// headers (-i), or uses -I for HEAD (headers only, and no -X HEAD warning).
 export function toCurl(rec: NetRecord): string {
-  const parts = [`curl -X ${rec.method} ${shQuote(rec.url)}`];
+  const method = rec.method.toUpperCase();
+  const head = method === 'HEAD';
+  const parts = [head ? `curl -I ${shQuote(rec.url)}` : `curl -i -X ${method} ${shQuote(rec.url)}`];
   for (const [k, v] of Object.entries(rec.reqHeaders ?? {})) parts.push(`-H ${shQuote(`${k}: ${v}`)}`);
-  if (rec.reqBody) parts.push(`--data ${shQuote(rec.reqBody)}`);
+  if (rec.reqBody && !head) parts.push(`--data ${shQuote(rec.reqBody)}`);
   return parts.join(' \\\n  ');
 }
 
