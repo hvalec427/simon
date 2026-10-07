@@ -290,6 +290,54 @@ impl DashApp {
         self.run_platform(dev.platform == Platform::Android);
     }
 
+    /// Start (boot) the highlighted simulator/emulator.
+    fn start_selected_device(&mut self) {
+        let dev = match self.devices.get(self.dev_sel) {
+            Some(d) => d.clone(),
+            None => return,
+        };
+        if dev.running {
+            self.set_flash(format!("{} is already running", dev.label));
+            return;
+        }
+        match dev.boot.clone() {
+            Some(target) => self.boot_target(target, dev.label.clone()),
+            None => self.set_flash("that's a physical device — it's already connected"),
+        }
+    }
+
+    /// Stop (shut down) the highlighted simulator/emulator. Physical devices
+    /// can't be stopped from here.
+    fn stop_selected_device(&mut self) {
+        let dev = match self.devices.get(self.dev_sel) {
+            Some(d) => d.clone(),
+            None => return,
+        };
+        if !dev.running {
+            self.set_flash(format!("{} isn't running", dev.label));
+            return;
+        }
+        if dev.boot.is_none() {
+            self.set_flash("can't stop a physical device from here");
+            return;
+        }
+        let tx = self.tx.clone();
+        let label = dev.label.clone();
+        self.set_flash(format!("stopping {label}…"));
+        std::thread::spawn(move || {
+            let res = match dev.open {
+                Some(OpenTarget::IosSim(udid)) => ios::shutdown_simulator(&udid),
+                Some(OpenTarget::AndroidSerial(serial)) => android::stop_emulator(&serial),
+                _ => Ok(()),
+            };
+            let msg = match res {
+                Ok(()) => format!("stopped {label}"),
+                Err(e) => format!("failed to stop {label}: {e}"),
+            };
+            let _ = tx.send(DashMsg::Flash(msg));
+        });
+    }
+
     /// Launch a simulator/emulator in the background, reporting via flash.
     fn boot_target(&mut self, target: BootTarget, label: String) {
         let tx = self.tx.clone();
@@ -541,6 +589,8 @@ impl DashApp {
                 }
             }
             KeyCode::Enter => self.install_selected(),
+            KeyCode::Char('b') => self.start_selected_device(),
+            KeyCode::Char('s') => self.stop_selected_device(),
             KeyCode::Char('o') => self.open_selected(),
             _ => {}
         }
@@ -630,6 +680,11 @@ fn focus_border(focused: bool) -> Style {
     }
 }
 
+/// The footer bar style, matching the embedded logs viewer's footer.
+fn bar_style() -> Style {
+    Style::default().bg(Color::Rgb(59, 66, 82)).fg(Color::White)
+}
+
 /// Split a pane's inner area into a content area and a one-line footer for that
 /// pane's own key hints (when there's room).
 fn split_hint(inner: Rect) -> (Rect, Option<Rect>) {
@@ -641,8 +696,14 @@ fn split_hint(inner: Rect) -> (Rect, Option<Rect>) {
     }
 }
 
-fn render_hint(frame: &mut Frame, area: Rect, text: &str) {
-    frame.render_widget(Paragraph::new(text).style(Style::default().fg(Color::DarkGray)), area);
+/// A pane's key-hint footer: a full-width bar (matching the logs footer) when the
+/// pane is focused, blank otherwise — so only the active pane shows its keys.
+fn render_hint(frame: &mut Frame, area: Rect, text: &str, focused: bool) {
+    let w = area.width as usize;
+    let (content, style) = if focused { (text.to_string(), bar_style()) } else { (String::new(), Style::default()) };
+    let n = content.chars().count();
+    let padded = if n >= w { content.chars().take(w).collect::<String>() } else { format!("{content}{}", " ".repeat(w - n)) };
+    frame.render_widget(Paragraph::new(padded).style(style), area);
 }
 
 fn render_processes(app: &mut DashApp, frame: &mut Frame, area: Rect) {
@@ -686,7 +747,7 @@ fn render_processes(app: &mut DashApp, frame: &mut Frame, area: Rect) {
         }
     }
     if let Some(h) = hint {
-        render_hint(frame, h, " [ ] tab · ⏎ type · x stop · m metro");
+        render_hint(frame, h, " [ ] tab · ⏎ type · x stop · m metro", focused);
     }
 }
 
@@ -736,7 +797,7 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     }
     frame.render_widget(Paragraph::new(Text::from(lines)), content);
     if let Some(h) = hint {
-        render_hint(frame, h, " ↑↓ select · ⏎ install & run · o open link");
+        render_hint(frame, h, " ↑↓ sel · ⏎ run · b start · s stop · o open", focused);
     }
 }
 
@@ -745,6 +806,7 @@ fn render_logs(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     let block = Block::default().borders(Borders::ALL).border_style(focus_border(focused)).title(" JS Logs / Network / Perf ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    app.rnview.set_focused(focused); // dim its footer when another pane is active
     app.rnview.render(frame, inner);
 }
 

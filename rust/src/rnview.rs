@@ -224,6 +224,7 @@ pub struct RnView {
     errors_only: bool,
     method_idx: usize,
     flash: Option<String>,
+    focused: bool, // when embedded: dim the footer unless the logs pane is active
 }
 
 impl RnView {
@@ -251,7 +252,15 @@ impl RnView {
             errors_only: false,
             method_idx: 0,
             flash: None,
+            focused: true,
         }
+    }
+
+    /// When embedded in the dashboard, controls whether the footer is shown
+    /// bright (active pane) or blank (another pane has focus). Standalone
+    /// `logs --rn` leaves this true.
+    pub fn set_focused(&mut self, focused: bool) {
+        self.focused = focused;
     }
 
     /// True while capturing a search/filter query — the embedding dashboard must
@@ -563,7 +572,9 @@ fn render_view(view: &mut RnView, frame: &mut Frame, area: Rect) {
     let filter_str = if view.filter.is_empty() { String::new() } else { format!(" · filter:\"{}\"", view.filter) };
     let head = format!(" {who} · {status}{filter_str}{net_filters} · {restart}   {tabbar}");
 
-    let foot = footer(view, is_logs);
+    // Blank the key footer when another pane has focus (embedded in the dashboard).
+    let foot = if view.focused { footer(view, is_logs) } else { String::new() };
+    let foot_style = if view.focused { bar_style() } else { Style::default() };
 
     let mut lines: Vec<Line> = Vec::new();
     lines.push(Line::styled(pad(&head, cols), bar_style()));
@@ -578,7 +589,7 @@ fn render_view(view: &mut RnView, frame: &mut Frame, area: Rect) {
         lines.push(Line::raw(""));
     }
     lines.truncate(rows - 1);
-    lines.push(Line::styled(pad(&foot, cols), bar_style()));
+    lines.push(Line::styled(pad(&foot, cols), foot_style));
 
     frame.render_widget(Paragraph::new(Text::from(lines)), area);
 }

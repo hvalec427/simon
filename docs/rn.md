@@ -133,7 +133,11 @@ Each pane owns its own keys (shown in that pane's footer); only a few are global
 |---|---|
 | `↑↓` / `jk` | select a device |
 | `⏎` | install & run the app on it (iOS or Android inferred from the device; an offline sim/emulator is launched first) |
+| `b` / `s` | start (boot) / stop (shut down) the selected simulator or emulator |
 | `o` | open the configured `openLink` on it — straight to the app when `bundleId` is set |
+
+Each pane's keys show in its own footer, and only the focused pane's footer is lit
+— the others go dark so there's no clutter.
 
 **Driving Metro.** Focus the Processes pane, press `⏎`, and every key goes
 straight to Metro — exactly like a normal terminal, so `r`, `d`, `j` and anything
