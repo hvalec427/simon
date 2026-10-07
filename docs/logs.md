@@ -12,4 +12,4 @@ simon logs "iPhone 16"     # target one directly
 
 Physical iOS streams the device syslog via [go-ios](https://github.com/danielpaulus/go-ios) (auto-installed, and simon starts the iOS 17+ developer tunnel for you — see [physical devices](physical-devices.md)).
 
-This is the **native** device log. For React Native **JS console + network** logs, use the metroctl viewer — see [metroctl logs](../metroctl/logs.md).
+This is the **native** device log. For React Native **JS console + network** logs, use the [metroctl](https://github.com/hvalec427/metroctl) viewer (`metroctl logs`).

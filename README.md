@@ -1,21 +1,10 @@
 # simon
 
-This repo is a **monorepo** (a Cargo workspace under [`rust/`](rust)) of small, composable macOS dev tools:
-
-| Tool | What it is | Status |
-|---|---|---|
-| **simon** | CLI for managing iOS simulators, Android emulators, and physical devices (boot, stop, wipe, logs, deep links, push). | Installed via the script below; self-updates. |
-| **metroctl** | A single-window React Native dashboard (Metro + build/run + JS logs/network/perf), built on simon. See [the metroctl guide](docs/metroctl/README.md). | Build from source for now — see [metroctl](#metroctl). |
-
-simon is the core and can be used entirely on its own; metroctl depends on it.
-
----
-
-## simon
-
 A CLI for managing both real devices and iOS simulators / Android emulators — boot, stop, wipe, stream logs, open deep links, and send test push notifications, all from the terminal. No more opening Xcode or Android Studio just to boot a simulator.
 
 Built entirely with AI (Claude).
+
+> **Companion tool:** [metroctl](https://github.com/hvalec427/metroctl) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
 
 > **macOS only.** simon ships as a signed macOS binary (Apple Silicon / Intel) and relies on macOS-only tooling (`xcrun`, `simctl`, `devicectl`). The installer and `simon update` are macOS-only; iOS features won't work elsewhere.
 
@@ -25,7 +14,7 @@ Built entirely with AI (Claude).
 curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 ```
 
-Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/simon/updating.md) for channels (stable/nightly/dev).
+Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
 
 ## Uninstall
 
@@ -71,12 +60,12 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 
 ## Guides
 
-- [Logs](docs/simon/logs.md) — native device logs
-- [RN dashboard](docs/metroctl/README.md) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
-- [Push notifications](docs/simon/push.md) — simulators and real devices (FCM / APNs)
-- [Location](docs/simon/location.md) — simulated GPS on simulators, emulators, and real devices
-- [Physical devices](docs/simon/physical-devices.md) — USB detection, the iOS tunnel, deep links
-- [Updating](docs/simon/updating.md) — release channels, self-update
+- [Logs](docs/logs.md) — native device logs
+- [RN dashboard](https://github.com/hvalec427/metroctl) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
+- [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
+- [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
+- [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
+- [Updating](docs/updating.md) — release channels, self-update
 
 ## Requirements
 
@@ -84,28 +73,8 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 - **iOS**: Xcode installed
 - **Android**: Android SDK (`ANDROID_HOME` set, or SDK at `~/Library/Android/sdk`)
 
----
+## React Native
 
-## metroctl
-
-A companion tool that runs a whole React Native project from one terminal window —
-start/drive Metro, boot simulators/emulators, build & run the app, open deep links,
-and watch JS logs/network/perf — all built on top of simon. Full guide:
-[docs/metroctl](docs/metroctl/README.md).
-
-It isn't in the installer yet; build it from the workspace:
-
-```sh
-cd rust
-cargo install --path metroctl     # puts `metroctl` on your PATH
-```
-
-Then, from inside a React Native project:
-
-```sh
-metroctl init     # register the project (writes ~/.config/simon/rn.json)
-metroctl          # open the dashboard
-metroctl logs     # just the RN JS log viewer
-```
-
-Or run it without installing: `cargo run -p metroctl -- <args>`.
+For a full React Native workflow — Metro, build/run on devices, and the JS
+logs/network/perf viewer — see the companion tool
+**[metroctl](https://github.com/hvalec427/metroctl)**, which builds on simon.
