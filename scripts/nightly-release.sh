@@ -41,11 +41,7 @@ TAG="v${VERSION}"
 
 echo "Building nightly ${TAG} (latest stable: ${LATEST}, since ${PREV})"
 
-# Inline the version into the binary (bundle.mjs reads package.json).
-npm version "${VERSION}" --no-git-tag-version --allow-same-version >/dev/null
-npm run bundle
-npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64
-npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
+bash scripts/build-binaries.sh "${VERSION}"
 
 # ── Release notes: a real changelog of everything since the previous nightly
 # (falling back to the latest stable), grouped like the stable releases, plus a

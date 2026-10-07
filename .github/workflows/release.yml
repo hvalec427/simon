@@ -24,10 +24,9 @@ concurrency:
 
 jobs:
   release:
-    # Must be macOS: pkg can't generate V8 bytecode for a macOS-arm64 target when
-    # cross-building on Linux, and arm64 binaries need an (ad-hoc) code signature
-    # that pkg applies natively on macOS. Linux builds produce binaries that are
-    # killed on Apple Silicon. Capacity-related queue failures can just be re-run.
+    # Must be macOS: the binaries are built with cargo for both Apple targets and
+    # ad-hoc code-signed with `codesign` (macOS-only), and iOS tooling is macOS
+    # only. Capacity-related queue failures can just be re-run.
     runs-on: macos-latest
 
     steps:
@@ -43,21 +42,23 @@ jobs:
           git fetch origin develop --tags
           git checkout -B develop origin/develop
 
+      # Node is only needed to run semantic-release (stable channel).
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      # npm 10 mis-hoists conflicting transitive majors (commitlint vs
-      # semantic-release both pull conventional-commits-filter), producing a
-      # lockfile it then rejects. npm 11 nests them correctly.
       - name: Pin npm 11
         run: npm install -g npm@11
 
-      - name: Install dependencies
+      - name: Install dependencies (for semantic-release)
         run: npm ci
 
-      - name: Test
-        run: npm test
+      - name: Rust targets
+        run: rustup target add aarch64-apple-darwin x86_64-apple-darwin
+
+      # Gate every release on the crate compiling.
+      - name: Build check
+        run: cargo build --manifest-path rust/Cargo.toml
 
       # develop push → rolling "dev" build (single prerelease, no changelog).
       - name: Dev build

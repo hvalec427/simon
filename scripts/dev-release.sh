@@ -20,11 +20,7 @@ VERSION="${BASE}-dev.${TS}"
 
 echo "Building dev ${VERSION} ($(git rev-parse --short HEAD))"
 
-# Inline the version into the binary (bundle.mjs reads package.json).
-npm version "${VERSION}" --no-git-tag-version --allow-same-version >/dev/null
-npm run bundle
-npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64
-npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
+bash scripts/build-binaries.sh "${VERSION}"
 
 NOTES="Rolling dev build — the latest \`develop\` commit, rebuilt on every push. No changelog; see the nightly or stable releases for notes. The build timestamp in the title lets \`simon update --dev\` tell builds apart."
 
