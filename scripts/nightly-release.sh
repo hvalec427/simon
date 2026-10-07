@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Cut a nightly prerelease from develop. Runs once a day (scheduled), tagged with
-# the Slovenia calendar date (e.g. 2.16.0-nightly.20261007) — one build per day,
-# so no timestamp is needed. Avoids semantic-release's git-notes push, which
-# GitHub intermittently rejects.
+# Cut a nightly prerelease from develop. Runs once a day (scheduled at 23:00 UTC),
+# tagged with the UTC date (e.g. 2.16.0-nightly.20261007) — one build per day, so
+# no timestamp is needed. Avoids semantic-release's git-notes push, which GitHub
+# intermittently rejects.
 set -euo pipefail
 
 REPO="hvalec427/simon"
@@ -33,7 +33,9 @@ if git rev-parse "${PREV}" >/dev/null 2>&1; then
   fi
 fi
 
-TS=$(TZ='Europe/Ljubljana' date +%Y%m%d)
+# Tag with the UTC date: the job runs at 23:00 UTC (end of the UTC day), so the
+# UTC date is the day's build. (Local time would tip into the next day in summer.)
+TS=$(date -u +%Y%m%d)
 VERSION="${BASE}-nightly.${TS}"
 TAG="v${VERSION}"
 

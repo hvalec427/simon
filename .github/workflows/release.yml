@@ -6,10 +6,9 @@ on:
       - master   # stable releases (on merge from develop)
       - develop  # rolling "dev" build on every commit
   schedule:
-    # Nightly from develop, once a day. Cron is UTC; 23:00 UTC ≈ midnight in
-    # Slovenia (00:00 CET in winter, 01:00 CEST in summer — GitHub cron can't
-    # follow DST). The build is skipped if there are no code changes since the
-    # last nightly, and it's tagged with the Ljubljana calendar date.
+    # Nightly from develop, once a day at 23:00 UTC (end of the UTC day). Tagged
+    # with the UTC date; skipped if there are no code changes since the last
+    # nightly. GitHub may fire the cron late under load.
     - cron: "0 23 * * *"
   workflow_dispatch: {} # manual nightly on demand
 
