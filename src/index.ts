@@ -95,6 +95,9 @@ program
 program
   .command('location [coords] [name]')
   .description('Set a simulated GPS location (coords as "lat,lon") on a simulator, emulator, or physical iOS device')
+  // Negative latitudes (e.g. -19.8,29.7) look like options to the parser; tolerate
+  // them instead of erroring — the command recovers the coords from argv itself.
+  .allowUnknownOption()
   .option('-i, --ios [name]', 'Limit to iOS (optionally name a simulator)')
   .option('-a, --android [name]', 'Limit to Android (optionally name an emulator)')
   .option('-r, --reset', 'Clear the simulated location (iOS simulators)')

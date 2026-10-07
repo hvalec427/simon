@@ -35,11 +35,18 @@ function goIos(args: string): void {
 }
 
 export async function locationCommand(
-  coords: string | undefined,
-  target: string | undefined,
+  coordsArg: string | undefined,
+  nameArg: string | undefined,
   options: LocationOptions,
 ): Promise<void> {
-  const { filter, name } = resolveFilterName(options, target);
+  // Latitudes can be negative (e.g. "-19.8,29.7"), but commander treats a leading
+  // "-" as an option flag, so such coords never arrive as the positional. Recover
+  // them from argv, and keep a dash-mangled coord from being taken as the name.
+  const coordRe = /^\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*$/;
+  const argv = process.argv.slice(2);
+  const coords = coordsArg && coordRe.test(coordsArg) ? coordsArg : argv.find(a => coordRe.test(a));
+  const positionalName = [coordsArg, nameArg].find(a => !!a && a !== coords && !coordRe.test(a));
+  const { filter, name } = resolveFilterName(options, positionalName);
 
   let parsed: { lat: string; lon: string } | null = null;
   if (!options.reset) {
