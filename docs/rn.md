@@ -97,33 +97,50 @@ Only `name` and `root` are mandatory — and `rn init` fills both in for you.
 
 Three tiled panes plus a status bar:
 
-- **Processes** — Metro and each `run ios`/`android`, one sub-tab each, shown as a
-  live terminal (colors and Metro's interactive menu render faithfully).
-- **Devices & Actions** — Metro status and every installed simulator/emulator
-  with a running marker.
+- **Processes** — Metro and each install/run, one sub-tab each, shown as a live
+  terminal (colors and Metro's interactive menu render faithfully).
+- **Devices & Actions** — every installed simulator/emulator and connected
+  physical device, with a running marker. When a `bundleId` is configured, each
+  running device also shows whether the app is installed (`app✓`/`app✗`) and, on
+  Android, whether it's currently in the foreground (`▶fg`).
 - **JS Logs / Network / Perf** — the full `logs --rn` viewer embedded (see
   [logs](logs.md) for its keys).
 
 ### Keys
 
+Each pane owns its own keys (shown in that pane's footer); only a few are global.
+
+**Global** (status bar):
+
 | Key | Action |
 |---|---|
 | `⇥` / `⇧⇥` | move focus between panes |
-| `m` | start (or restart) Metro |
-| `i` / `a` | run iOS / Android (on whatever device you've booted) |
-| `R` / `D` / `J` | send Metro reload / dev-menu / debugger from any pane |
-| `[` / `]` | *(Processes)* switch sub-tab |
-| `⏎` | *(Processes)* enter **input mode** — raw keys go to the process |
-| `esc` | leave input mode |
-| `↑↓` / `jk`, `b` | *(Devices)* select, then boot the selected device |
-| `o` | *(Devices)* open the configured `openLink` on the selected device, delivered straight to the app when `bundleId` is set |
+| `R` / `D` | send Metro reload / dev-menu (goes to the Metro process) |
 | `q` / `Ctrl-C` | quit — asks `y/n` first, then stops the processes simon started |
+
+**Processes pane:**
+
+| Key | Action |
+|---|---|
+| `[` / `]` | switch sub-tab (Metro / iOS / Android) |
+| `⏎` | enter **input mode** — raw keys go to the process (then `esc` to leave) |
+| `x` | stop (kill) the process in the current tab |
+| `m` | start (or restart) Metro |
+
+**Devices pane:**
+
+| Key | Action |
+|---|---|
+| `↑↓` / `jk` | select a device |
+| `⏎` | install & run the app on it (iOS or Android inferred from the device; an offline sim/emulator is launched first) |
+| `o` | open the configured `openLink` on it — straight to the app when `bundleId` is set |
 
 **Driving Metro.** Focus the Processes pane, press `⏎`, and every key goes
 straight to Metro — exactly like a normal terminal, so `r`, `d`, `j` and anything
 else Metro supports work. `esc` returns to navigation, so you're never trapped.
-Don't want to switch panes? `R` / `D` / `J` send the common Metro keys from
-anywhere. `R` falls back to a CDP reload when Metro isn't running under simon.
+Don't want to switch panes? `R` / `D` send reload / dev-menu from anywhere (`R`
+falls back to a CDP reload when Metro isn't running under simon).
 
-> **Dev-only, macOS.** The JS feed needs Metro running; booting simulators uses
-> the same `xcrun`/`adb` tooling as the rest of simon.
+> **Dev-only, macOS.** The JS feed needs Metro running; booting simulators and
+> the app-presence checks use the same `xcrun`/`adb` tooling as the rest of simon.
+> Foreground detection is Android-only; iOS can't report it over these tools.

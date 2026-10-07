@@ -104,6 +104,16 @@ pub fn open_url_on_simulator(udid: &str, url: &str) -> anyhow::Result<()> {
     simctl(&["openurl", udid, url])
 }
 
+/// Whether an app with `bundle_id` is installed on a (booted or shutdown)
+/// simulator — `get_app_container` succeeds only when the app is present.
+pub fn app_installed_on_simulator(udid: &str, bundle_id: &str) -> bool {
+    Command::new("xcrun")
+        .args(["simctl", "get_app_container", udid, bundle_id])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
 pub fn set_sim_location(udid: &str, lat: &str, lon: &str) -> anyhow::Result<()> {
     simctl(&["location", udid, "set", &format!("{lat},{lon}")])
 }

@@ -264,6 +264,37 @@ pub fn open_url_with_package(serial: &str, url: &str, package: Option<&str>) -> 
     Ok(())
 }
 
+/// Whether `package` is installed on the device (`pm path` prints a path only
+/// when it is).
+pub fn app_installed(serial: &str, package: &str) -> bool {
+    let adb = find_bin("adb");
+    Command::new(&adb)
+        .args(["-s", serial, "shell", "pm", "path", package])
+        .output()
+        .map(|o| o.status.success() && !String::from_utf8_lossy(&o.stdout).trim().is_empty())
+        .unwrap_or(false)
+}
+
+/// The package currently in the foreground (resumed), parsed from dumpsys.
+pub fn foreground_package(serial: &str) -> Option<String> {
+    let adb = find_bin("adb");
+    let out = Command::new(&adb).args(["-s", serial, "shell", "dumpsys", "activity", "activities"]).output().ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    for line in text.lines() {
+        if line.contains("mResumedActivity") || line.contains("topResumedActivity") {
+            // e.g. "... u0 com.example/.MainActivity t42}" → take the package.
+            for tok in line.split_whitespace() {
+                if let Some((pkg, _)) = tok.split_once('/') {
+                    if pkg.contains('.') {
+                        return Some(pkg.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
 /// `adb emu geo fix` takes longitude first, then latitude.
 pub fn emu_geo_fix(serial: &str, lon: &str, lat: &str) -> anyhow::Result<()> {
     let adb = find_bin("adb");

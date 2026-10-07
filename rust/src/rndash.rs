@@ -1,10 +1,12 @@
 //! `simon rn` — the tiled React Native dashboard. One window: a Processes pane
-//! (Metro + build runs, each in a PTY), a Devices & Actions pane (boot
-//! sims/emulators), and the embedded `RnView` (JS logs / network / perf). The
-//! Metro PTY gets raw-key passthrough so `r`/`d`/`j` and friends work exactly as
-//! in a normal terminal; the same actions are also reachable as global shortcuts.
+//! (Metro + install/run, each in a PTY), a Devices & Actions pane (launch
+//! sims/emulators, install & run, open links, app-presence), and the embedded
+//! `RnView` (JS logs / network / perf). Keys are pane-scoped — each pane owns its
+//! own, shown in its footer — except a few globals (focus, `R`/`D` Metro
+//! reload/dev-menu, quit). The Metro PTY takes raw-key passthrough in input mode,
+//! so `r`/`d`/`j` and anything else Metro supports work as in a normal terminal.
 
-use crate::devices::{get_all_installed, get_all_running, InstalledDevice, RunningDevice};
+use crate::devices::{get_all_installed, get_all_running, InstalledDevice, Platform, RunningDevice};
 use crate::proc::PtyProcess;
 use crate::rnclient::{ConnCmd, RnClient};
 use crate::rnconfig::ProjectConfig;
@@ -47,13 +49,18 @@ enum OpenTarget {
 }
 
 /// A row in the Devices pane: a simulator/emulator (bootable) or a connected
-/// physical device (just listed). `open` is set once the device is running.
+/// physical device (just listed). `open` is set once the device is running;
+/// `installed`/`foreground` are populated (when a bundleId is configured) for
+/// running devices — `None` means "unknown / not checked".
 #[derive(Clone)]
 struct DeviceRow {
     label: String,
+    platform: Platform,
     running: bool,
     boot: Option<BootTarget>,
     open: Option<OpenTarget>,
+    installed: Option<bool>,
+    foreground: Option<bool>,
 }
 
 pub struct DashApp {
@@ -89,6 +96,8 @@ impl DashApp {
         let client = RnClient::start(project.metro_port());
         // Background device poller — simctl/adb are slow, so keep them off the UI thread.
         let dev_tx = tx.clone();
+        let ios_bundle = project.ios_bundle_id().map(String::from);
+        let android_bundle = project.android_bundle_id().map(String::from);
         std::thread::spawn(move || loop {
             let running_devices = get_all_running(None);
             // Resolve a running emulator's adb serial from its AVD name.
@@ -98,31 +107,75 @@ impl DashApp {
                     _ => None,
                 })
             };
+            // Is the configured app installed / in the foreground? Only probed for
+            // running devices with a bundleId set, to bound the extra shell calls.
+            let ios_installed = |udid: &str| ios_bundle.as_deref().map(|b| ios::app_installed_on_simulator(udid, b));
+            let android_state = |serial: &str| match android_bundle.as_deref() {
+                Some(pkg) => (
+                    Some(android::app_installed(serial, pkg)),
+                    Some(android::foreground_package(serial).as_deref() == Some(pkg)),
+                ),
+                None => (None, None),
+            };
             // Installed sims/emulators (bootable; openable once running) …
             let mut rows: Vec<DeviceRow> = Vec::new();
             for d in get_all_installed(None) {
                 let label = d.label();
                 let running = d.running();
-                let (boot, open) = match &d {
-                    InstalledDevice::IosSim { udid, .. } => (
-                        Some(BootTarget::IosSim(udid.clone())),
-                        running.then(|| OpenTarget::IosSim(udid.clone())),
-                    ),
-                    InstalledDevice::AndroidAvd { name, .. } => (
-                        Some(BootTarget::Avd(name.clone())),
-                        if running { android_serial(name).map(OpenTarget::AndroidSerial) } else { None },
-                    ),
+                let row = match &d {
+                    InstalledDevice::IosSim { udid, .. } => DeviceRow {
+                        label,
+                        platform: Platform::Ios,
+                        running,
+                        boot: Some(BootTarget::IosSim(udid.clone())),
+                        open: running.then(|| OpenTarget::IosSim(udid.clone())),
+                        installed: if running { ios_installed(udid) } else { None },
+                        foreground: None,
+                    },
+                    InstalledDevice::AndroidAvd { name, .. } => {
+                        let serial = if running { android_serial(name) } else { None };
+                        let (installed, foreground) = match &serial {
+                            Some(s) => android_state(s),
+                            None => (None, None),
+                        };
+                        DeviceRow {
+                            label,
+                            platform: Platform::Android,
+                            running,
+                            boot: Some(BootTarget::Avd(name.clone())),
+                            open: serial.map(OpenTarget::AndroidSerial),
+                            installed,
+                            foreground,
+                        }
+                    }
                 };
-                rows.push(DeviceRow { label, running, boot, open });
+                rows.push(row);
             }
             // … plus any connected physical devices (already running, not bootable).
             for d in &running_devices {
                 match d {
                     RunningDevice::IosPhysical { udid, .. } => {
-                        rows.push(DeviceRow { label: d.label(), running: true, boot: None, open: Some(OpenTarget::IosPhysical(udid.clone())) });
+                        rows.push(DeviceRow {
+                            label: d.label(),
+                            platform: Platform::Ios,
+                            running: true,
+                            boot: None,
+                            open: Some(OpenTarget::IosPhysical(udid.clone())),
+                            installed: None, // devicectl app queries are slow — skip
+                            foreground: None,
+                        });
                     }
                     RunningDevice::AndroidPhysical { serial, .. } => {
-                        rows.push(DeviceRow { label: d.label(), running: true, boot: None, open: Some(OpenTarget::AndroidSerial(serial.clone())) });
+                        let (installed, foreground) = android_state(serial);
+                        rows.push(DeviceRow {
+                            label: d.label(),
+                            platform: Platform::Android,
+                            running: true,
+                            boot: None,
+                            open: Some(OpenTarget::AndroidSerial(serial.clone())),
+                            installed,
+                            foreground,
+                        });
                     }
                     _ => {}
                 }
@@ -218,37 +271,58 @@ impl DashApp {
         }
     }
 
-    /// Boot the selected simulator/emulator via simon's existing device code.
-    fn boot_selected(&mut self) {
+    /// Install & run the app on the highlighted device. Platform comes from the
+    /// device (no need for separate iOS/Android keys); an offline sim/emulator is
+    /// launched first so the run targets it.
+    fn install_selected(&mut self) {
         let dev = match self.devices.get(self.dev_sel) {
             Some(d) => d.clone(),
-            None => return,
-        };
-        if dev.running {
-            self.set_flash(format!("{} is already running", dev.label));
-            return;
-        }
-        let target = match dev.boot {
-            Some(t) => t,
             None => {
-                self.set_flash("that's a physical device — it's already connected");
+                self.set_flash("no device selected");
                 return;
             }
         };
+        if !dev.running {
+            if let Some(target) = dev.boot.clone() {
+                self.boot_target(target, dev.label.clone());
+            }
+        }
+        self.run_platform(dev.platform == Platform::Android);
+    }
+
+    /// Launch a simulator/emulator in the background, reporting via flash.
+    fn boot_target(&mut self, target: BootTarget, label: String) {
         let tx = self.tx.clone();
-        let label = dev.label.clone();
         self.set_flash(format!("launching {label}…"));
         std::thread::spawn(move || {
             let res = match target {
                 BootTarget::IosSim(udid) => ios::boot_simulator(&udid),
                 BootTarget::Avd(name) => android::launch_avd(&name),
             };
-            let msg = match res {
-                Ok(()) => format!("launched {label}"),
-                Err(e) => format!("failed to launch {label}: {e}"),
-            };
-            let _ = tx.send(DashMsg::Flash(msg));
+            if let Err(e) = res {
+                let _ = tx.send(DashMsg::Flash(format!("failed to launch {label}: {e}")));
+            }
         });
+    }
+
+    /// Stop (kill) the process in the current Processes sub-tab.
+    fn stop_selected_proc(&mut self) {
+        let msg = match self.procs.get_mut(self.proc_sel) {
+            Some(p) => {
+                let alive = p.is_alive();
+                if alive {
+                    p.kill();
+                }
+                let label = p.label.clone();
+                if alive {
+                    format!("stopped {label}")
+                } else {
+                    format!("{label} already stopped")
+                }
+            }
+            None => return,
+        };
+        self.set_flash(msg);
     }
 
     /// Open the configured app link on the selected device (if it's running).
@@ -267,7 +341,7 @@ impl DashApp {
         let target = match dev.open {
             Some(t) => t,
             None => {
-                self.set_flash(format!("{} isn't running — boot it first (b)", dev.label));
+                self.set_flash(format!("{} isn't running — start it first (⏎)", dev.label));
                 return;
             }
         };
@@ -404,61 +478,70 @@ impl DashApp {
             return;
         }
 
-        // Logs pane owns almost every key; the dashboard keeps only focus + quit.
-        // While the viewer is mid search/filter entry, it must capture Tab too.
-        if self.focus == Pane::Logs {
-            let capturing = self.rnview.is_capturing_input();
+        // Global keys — work from any pane. Suppressed only while the logs viewer
+        // is capturing a search/filter query (so those chars reach the query).
+        let logs_capturing = self.focus == Pane::Logs && self.rnview.is_capturing_input();
+        if !logs_capturing {
             match key.code {
-                KeyCode::Tab if !capturing => self.cycle_focus(false),
-                KeyCode::BackTab if !capturing => self.cycle_focus(true),
-                _ => {
-                    // RnView returns true on q/Ctrl-C; turn that into a confirm.
-                    if self.rnview.on_key(key, &self.client) {
-                        self.confirm_quit = true;
-                    }
+                KeyCode::Tab => return self.cycle_focus(false),
+                KeyCode::BackTab => return self.cycle_focus(true),
+                KeyCode::Char('q') => {
+                    self.confirm_quit = true;
+                    return;
                 }
+                KeyCode::Char('R') => return self.metro_key(b'r', "reload"),
+                KeyCode::Char('D') => return self.metro_key(b'd', "dev menu"),
+                _ => {}
             }
-            return;
         }
 
-        // Processes / Devices panes.
+        // Pane-scoped keys: each pane owns its own, no cross-pane duplicates.
+        match self.focus {
+            Pane::Processes => self.processes_key(key),
+            Pane::Devices => self.devices_key(key),
+            Pane::Logs => {
+                if self.rnview.on_key(key, &self.client) {
+                    self.confirm_quit = true;
+                }
+            }
+        }
+    }
+
+    fn processes_key(&mut self, key: KeyEvent) {
         match key.code {
-            KeyCode::Char('q') => self.confirm_quit = true,
-            KeyCode::Tab => self.cycle_focus(false),
-            KeyCode::BackTab => self.cycle_focus(true),
-            KeyCode::Char('m') => self.start_metro(),
-            KeyCode::Char('i') => self.run_platform(false),
-            KeyCode::Char('a') => self.run_platform(true),
-            KeyCode::Char('R') => self.metro_key(b'r', "reload"),
-            KeyCode::Char('D') => self.metro_key(b'd', "dev menu"),
-            KeyCode::Char('J') => self.metro_key(b'j', "debugger"),
-            KeyCode::Char('[') if self.focus == Pane::Processes => {
+            KeyCode::Char('[') => {
                 if !self.procs.is_empty() {
                     self.proc_sel = (self.proc_sel + self.procs.len() - 1) % self.procs.len();
                 }
             }
-            KeyCode::Char(']') if self.focus == Pane::Processes => {
+            KeyCode::Char(']') => {
                 if !self.procs.is_empty() {
                     self.proc_sel = (self.proc_sel + 1) % self.procs.len();
                 }
             }
-            KeyCode::Enter if self.focus == Pane::Processes => {
+            KeyCode::Enter => {
                 if self.procs.get(self.proc_sel).map(|p| p.is_alive()).unwrap_or(false) {
                     self.input_mode = true;
                 } else {
                     self.set_flash("no running process in this tab");
                 }
             }
-            KeyCode::Up | KeyCode::Char('k') if self.focus == Pane::Devices => {
-                self.dev_sel = self.dev_sel.saturating_sub(1);
-            }
-            KeyCode::Down | KeyCode::Char('j') if self.focus == Pane::Devices => {
+            KeyCode::Char('x') => self.stop_selected_proc(),
+            KeyCode::Char('m') => self.start_metro(),
+            _ => {}
+        }
+    }
+
+    fn devices_key(&mut self, key: KeyEvent) {
+        match key.code {
+            KeyCode::Up | KeyCode::Char('k') => self.dev_sel = self.dev_sel.saturating_sub(1),
+            KeyCode::Down | KeyCode::Char('j') => {
                 if !self.devices.is_empty() {
                     self.dev_sel = (self.dev_sel + 1).min(self.devices.len() - 1);
                 }
             }
-            KeyCode::Char('b') if self.focus == Pane::Devices => self.boot_selected(),
-            KeyCode::Char('o') if self.focus == Pane::Devices => self.open_selected(),
+            KeyCode::Enter => self.install_selected(),
+            KeyCode::Char('o') => self.open_selected(),
             _ => {}
         }
     }
@@ -547,6 +630,21 @@ fn focus_border(focused: bool) -> Style {
     }
 }
 
+/// Split a pane's inner area into a content area and a one-line footer for that
+/// pane's own key hints (when there's room).
+fn split_hint(inner: Rect) -> (Rect, Option<Rect>) {
+    if inner.height >= 3 {
+        let v = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(inner);
+        (v[0], Some(v[1]))
+    } else {
+        (inner, None)
+    }
+}
+
+fn render_hint(frame: &mut Frame, area: Rect, text: &str) {
+    frame.render_widget(Paragraph::new(text).style(Style::default().fg(Color::DarkGray)), area);
+}
+
 fn render_processes(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     let focused = app.focus == Pane::Processes;
     let tabs: String = if app.procs.is_empty() {
@@ -574,18 +672,21 @@ fn render_processes(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     let block = Block::default().borders(Borders::ALL).border_style(focus_border(focused)).title(title);
     let inner = block.inner(area);
     frame.render_widget(block, area);
-    app.proc_area = Some(inner);
+    let (content, hint) = split_hint(inner);
+    app.proc_area = Some(content);
 
     match app.procs.get(app.proc_sel) {
         Some(p) => {
-            let lines = pty_lines(&p.parser(), inner.width, inner.height);
-            frame.render_widget(Paragraph::new(Text::from(lines)), inner);
+            let lines = pty_lines(&p.parser(), content.width, content.height);
+            frame.render_widget(Paragraph::new(Text::from(lines)), content);
         }
         None => {
-            let hint = Paragraph::new("Press  m  to start Metro, or  i / a  to run iOS / Android.")
-                .style(Style::default().fg(Color::DarkGray));
-            frame.render_widget(hint, inner);
+            let msg = Paragraph::new("Press  m  to start Metro.").style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(msg, content);
         }
+    }
+    if let Some(h) = hint {
+        render_hint(frame, h, " [ ] tab · ⏎ type · x stop · m metro");
     }
 }
 
@@ -594,6 +695,7 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     let block = Block::default().borders(Borders::ALL).border_style(focus_border(focused)).title(" Devices & Actions ");
     let inner = block.inner(area);
     frame.render_widget(block, area);
+    let (content, hint) = split_hint(inner);
 
     let metro_up = app.metro_idx.and_then(|i| app.procs.get(i)).map(|p| p.is_alive()).unwrap_or(false);
     let metro_line = if metro_up {
@@ -620,9 +722,22 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
         } else {
             Style::default()
         };
-        lines.push(Line::from(vec![Span::raw(" "), marker, Span::styled(d.label.clone(), name_style)]));
+        let mut spans = vec![Span::raw(" "), marker, Span::styled(d.label.clone(), name_style)];
+        // App-presence tags (only meaningful with a configured bundleId).
+        match d.installed {
+            Some(true) => spans.push(Span::styled("  app✓", Style::default().fg(Color::Green))),
+            Some(false) => spans.push(Span::styled("  app✗", Style::default().fg(Color::DarkGray))),
+            None => {}
+        }
+        if d.foreground == Some(true) {
+            spans.push(Span::styled("  ▶fg", Style::default().fg(Color::Cyan)));
+        }
+        lines.push(Line::from(spans));
     }
-    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
+    frame.render_widget(Paragraph::new(Text::from(lines)), content);
+    if let Some(h) = hint {
+        render_hint(frame, h, " ↑↓ select · ⏎ install & run · o open link");
+    }
 }
 
 fn render_logs(app: &mut DashApp, frame: &mut Frame, area: Rect) {
@@ -635,16 +750,13 @@ fn render_logs(app: &mut DashApp, frame: &mut Frame, area: Rect) {
 
 fn render_status(app: &DashApp, frame: &mut Frame, area: Rect) {
     let style = Style::default().bg(Color::Rgb(59, 66, 82)).fg(Color::White);
-    let text = if let Some((f, _)) = &app.flash {
+    // Global keys only — each pane shows its own keys in its footer.
+    let text: String = if let Some((f, _)) = &app.flash {
         format!(" {f}")
     } else if app.input_mode {
         " INPUT — keys go to the process · Esc to exit".into()
     } else {
-        match app.focus {
-            Pane::Processes => " ⇥ focus · [ ] tab · ⏎ input · m metro · i iOS · a Android · R reload · D dev-menu · q quit".into(),
-            Pane::Devices => " ⇥ focus · ↑↓ select · b boot · o open app · i iOS · a Android · m metro · q quit".into(),
-            Pane::Logs => " ⇥ focus · log keys active ([ ] tabs · / search · ⏎ detail) · q quit".into(),
-        }
+        " ⇥ focus · R reload · D dev-menu · q quit".into()
     };
     let w = area.width as usize;
     let padded = {
