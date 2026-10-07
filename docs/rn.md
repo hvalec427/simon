@@ -31,6 +31,7 @@ entry looks like:
       "metro":   { "command": "yarn start", "port": 8081 },
       "ios":     { "command": "yarn ios" },
       "android": { "command": "yarn android" },
+      "openLink": "https://myapp.com/home",// optional; `o` opens it on a device
       "env": { "FOO": "bar" }             // optional, merged into every command
     }
   ]
@@ -77,6 +78,7 @@ Three tiled panes plus a status bar:
 | `⏎` | *(Processes)* enter **input mode** — raw keys go to the process |
 | `esc` | leave input mode |
 | `↑↓` / `jk`, `b` | *(Devices)* select, then boot the selected device |
+| `o` | *(Devices)* open the configured `openLink` on the selected device |
 | `q` / `Ctrl-C` | quit (stops the processes simon started) |
 
 **Driving Metro.** Focus the Processes pane, press `⏎`, and every key goes

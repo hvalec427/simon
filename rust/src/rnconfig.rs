@@ -91,6 +91,10 @@ pub struct ProjectConfig {
     pub ios: Option<PlatformConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub android: Option<PlatformConfig>,
+    /// A universal/deep link that opens the app, fired at a device with `o` in
+    /// the dashboard (e.g. "https://myapp.com/home" or "myapp://home").
+    #[serde(rename = "openLink", default, skip_serializing_if = "Option::is_none")]
+    pub open_link: Option<String>,
     /// Extra env vars merged into every command simon spawns for this project.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
@@ -99,7 +103,11 @@ pub struct ProjectConfig {
 impl ProjectConfig {
     /// A minimal entry pointing at a root, everything else derived from defaults.
     pub fn new(name: String, root: String) -> Self {
-        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, env: BTreeMap::new() }
+        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, open_link: None, env: BTreeMap::new() }
+    }
+
+    pub fn open_link(&self) -> Option<&str> {
+        self.open_link.as_deref()
     }
 
     pub fn package_manager(&self) -> PackageManager {

@@ -38,13 +38,22 @@ enum BootTarget {
     Avd(String),
 }
 
+/// How to open a URL on a running device (for the configured app link).
+#[derive(Clone)]
+enum OpenTarget {
+    IosSim(String),      // simulator udid
+    IosPhysical(String), // device udid
+    AndroidSerial(String),
+}
+
 /// A row in the Devices pane: a simulator/emulator (bootable) or a connected
-/// physical device (just listed).
+/// physical device (just listed). `open` is set once the device is running.
 #[derive(Clone)]
 struct DeviceRow {
     label: String,
     running: bool,
     boot: Option<BootTarget>,
+    open: Option<OpenTarget>,
 }
 
 pub struct DashApp {
@@ -80,21 +89,41 @@ impl DashApp {
         // Background device poller — simctl/adb are slow, so keep them off the UI thread.
         let dev_tx = tx.clone();
         std::thread::spawn(move || loop {
-            // Installed sims/emulators (bootable) …
-            let mut rows: Vec<DeviceRow> = get_all_installed(None)
-                .into_iter()
-                .map(|d| {
-                    let boot = match &d {
-                        InstalledDevice::IosSim { udid, .. } => BootTarget::IosSim(udid.clone()),
-                        InstalledDevice::AndroidAvd { name, .. } => BootTarget::Avd(name.clone()),
-                    };
-                    DeviceRow { label: d.label(), running: d.running(), boot: Some(boot) }
+            let running_devices = get_all_running(None);
+            // Resolve a running emulator's adb serial from its AVD name.
+            let android_serial = |avd: &str| {
+                running_devices.iter().find_map(|d| match d {
+                    RunningDevice::AndroidEmulator { name, serial } if name == avd => Some(serial.clone()),
+                    _ => None,
                 })
-                .collect();
+            };
+            // Installed sims/emulators (bootable; openable once running) …
+            let mut rows: Vec<DeviceRow> = Vec::new();
+            for d in get_all_installed(None) {
+                let label = d.label();
+                let running = d.running();
+                let (boot, open) = match &d {
+                    InstalledDevice::IosSim { udid, .. } => (
+                        Some(BootTarget::IosSim(udid.clone())),
+                        running.then(|| OpenTarget::IosSim(udid.clone())),
+                    ),
+                    InstalledDevice::AndroidAvd { name, .. } => (
+                        Some(BootTarget::Avd(name.clone())),
+                        if running { android_serial(name).map(OpenTarget::AndroidSerial) } else { None },
+                    ),
+                };
+                rows.push(DeviceRow { label, running, boot, open });
+            }
             // … plus any connected physical devices (already running, not bootable).
-            for d in get_all_running(None) {
-                if matches!(d, RunningDevice::IosPhysical { .. } | RunningDevice::AndroidPhysical { .. }) {
-                    rows.push(DeviceRow { label: d.label(), running: true, boot: None });
+            for d in &running_devices {
+                match d {
+                    RunningDevice::IosPhysical { udid, .. } => {
+                        rows.push(DeviceRow { label: d.label(), running: true, boot: None, open: Some(OpenTarget::IosPhysical(udid.clone())) });
+                    }
+                    RunningDevice::AndroidPhysical { serial, .. } => {
+                        rows.push(DeviceRow { label: d.label(), running: true, boot: None, open: Some(OpenTarget::AndroidSerial(serial.clone())) });
+                    }
+                    _ => {}
                 }
             }
             if dev_tx.send(DashMsg::Devices(rows)).is_err() {
@@ -215,6 +244,43 @@ impl DashApp {
             let msg = match res {
                 Ok(()) => format!("launched {label}"),
                 Err(e) => format!("failed to launch {label}: {e}"),
+            };
+            let _ = tx.send(DashMsg::Flash(msg));
+        });
+    }
+
+    /// Open the configured app link on the selected device (if it's running).
+    fn open_selected(&mut self) {
+        let url = match self.project.open_link() {
+            Some(u) => u.to_string(),
+            None => {
+                self.set_flash("set \"openLink\" in rn.json to use this");
+                return;
+            }
+        };
+        let dev = match self.devices.get(self.dev_sel) {
+            Some(d) => d.clone(),
+            None => return,
+        };
+        let target = match dev.open {
+            Some(t) => t,
+            None => {
+                self.set_flash(format!("{} isn't running — boot it first (b)", dev.label));
+                return;
+            }
+        };
+        let tx = self.tx.clone();
+        let label = dev.label.clone();
+        self.set_flash(format!("opening on {label}…"));
+        std::thread::spawn(move || {
+            let res = match target {
+                OpenTarget::IosSim(udid) => ios::open_url_on_simulator(&udid, &url),
+                OpenTarget::IosPhysical(udid) => ios::open_url_on_physical_ios(&udid, &url, None, false),
+                OpenTarget::AndroidSerial(serial) => android::open_url(&serial, &url),
+            };
+            let msg = match res {
+                Ok(()) => format!("opened on {label}"),
+                Err(e) => format!("open failed on {label}: {e}"),
             };
             let _ = tx.send(DashMsg::Flash(msg));
         });
@@ -372,6 +438,7 @@ impl DashApp {
                 }
             }
             KeyCode::Char('b') if self.focus == Pane::Devices => self.boot_selected(),
+            KeyCode::Char('o') if self.focus == Pane::Devices => self.open_selected(),
             _ => {}
         }
     }
@@ -525,7 +592,7 @@ fn render_status(app: &DashApp, frame: &mut Frame, area: Rect) {
     } else {
         match app.focus {
             Pane::Processes => " ⇥ focus · [ ] tab · ⏎ input · m metro · i iOS · a Android · R reload · D dev-menu · q quit".into(),
-            Pane::Devices => " ⇥ focus · ↑↓ select · b boot · i iOS · a Android · m metro · R reload · q quit".into(),
+            Pane::Devices => " ⇥ focus · ↑↓ select · b boot · o open app · i iOS · a Android · m metro · q quit".into(),
             Pane::Logs => " ⇥ focus · log keys active ([ ] tabs · / search · ⏎ detail) · q quit".into(),
         }
     };
