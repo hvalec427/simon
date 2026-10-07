@@ -109,15 +109,3 @@ metroctl logs     # just the RN JS log viewer
 ```
 
 Or run it without installing: `cargo run -p metroctl -- <args>`.
-
-## Repo layout
-
-```
-rust/
-  Cargo.toml      # workspace
-  simon/          # device-management library + the `simon` CLI
-  metroctl/       # the metroctl binary (depends on simon)
-```
-
-Build everything with `cargo build` in `rust/`; build one tool with
-`cargo build -p simon` / `-p metroctl`.
