@@ -9,11 +9,15 @@ mod commands;
 mod devices;
 mod goios;
 mod ios;
+mod proc;
 mod push;
 mod pushconfig;
 mod rn;
 mod rnclient;
+mod rnconfig;
+mod rndash;
 mod rntui;
+mod rnview;
 mod update;
 
 use clap::{Parser, Subcommand};
@@ -156,6 +160,11 @@ enum Command {
         #[arg(long)]
         apns: bool,
     },
+    /// Manage and run a React Native project from a single-window dashboard
+    Rn {
+        #[command(subcommand)]
+        action: Option<RnAction>,
+    },
     /// Manage the iOS developer tunnel (start | stop | status)
     Tunnel { action: Option<String> },
     /// Check your environment for the required tooling
@@ -184,6 +193,14 @@ enum Command {
     },
 }
 
+#[derive(Subcommand)]
+enum RnAction {
+    /// Register (or update) the current directory as a React Native project
+    Init,
+    /// Print the path to the RN config file
+    Config,
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.command {
@@ -206,6 +223,11 @@ fn main() {
         Command::Push { payload, ios, bundle_id, template, token, fcm, apns } => {
             commands::push::run(payload, ios, bundle_id, template, token, fcm, apns)
         }
+        Command::Rn { action } => match action {
+            Some(RnAction::Init) => commands::rn::init(),
+            Some(RnAction::Config) => commands::rn::print_config_path(),
+            None => commands::rn::launch(),
+        },
         Command::Tunnel { action } => commands::tunnel::run(action),
         Command::Doctor => commands::doctor::run(),
         Command::CheckUpdate { stable, nightly, dev } => commands::check_update::run(stable, nightly, dev),

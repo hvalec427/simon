@@ -8,6 +8,7 @@ pub mod location;
 pub mod logs;
 pub mod open_link;
 pub mod push;
+pub mod rn;
 pub mod running;
 pub mod stop;
 pub mod tunnel;
