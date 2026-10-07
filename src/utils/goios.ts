@@ -1,6 +1,10 @@
 import chalk from 'chalk';
-import { execSync, spawn } from 'child_process';
+import { execSync } from 'child_process';
+import { tmpdir } from 'os';
+import path from 'path';
 import { spinner } from './prompt.js';
+
+export const TUNNEL_LOG = path.join(tmpdir(), 'simon-ios-tunnel.log');
 
 export function hasGoIos(): boolean {
   try {
@@ -56,19 +60,38 @@ export function ensureTunnel(): void {
     throw new Error('Could not get sudo to start the developer tunnel. Start it manually:  sudo ios tunnel start');
   }
 
-  const child = spawn('sudo', ['ios', 'tunnel', 'start'], { detached: true, stdio: 'ignore' });
-  child.unref();
-
-  // Give the tunnel a moment to come up before using it.
+  // Launch via the shell with `nohup … &`, inheriting the terminal. macOS sudo
+  // ties its credential timestamp to the tty, so it must keep the real
+  // controlling terminal (a `detached`/setsid process loses it and re-prompts
+  // with nowhere to read a password — which is why it never started). nohup + &
+  // lets it outlive simon; output goes to a log file.
   try {
-    execSync('sleep 3');
+    execSync(`nohup sudo ios tunnel start > "${TUNNEL_LOG}" 2>&1 &`, { stdio: 'inherit' });
   } catch {
-    /* ignore */
+    /* the backgrounded job returns immediately; real errors surface in the log */
   }
 
-  if (!tunnelRunning()) {
-    throw new Error('The developer tunnel did not start. Try it manually:  sudo ios tunnel start');
+  // First run can take a few seconds (it mounts the developer image). Poll.
+  for (let i = 0; i < 24; i++) {
+    if (tunnelRunning()) {
+      try {
+        execSync('sleep 2'); // small grace for the tunnel to finish establishing
+      } catch {
+        /* ignore */
+      }
+      console.log(chalk.gray(`Tunnel started (logs: ${TUNNEL_LOG}).`));
+      return;
+    }
+    try {
+      execSync('sleep 0.5');
+    } catch {
+      /* ignore */
+    }
   }
+
+  throw new Error(
+    `The developer tunnel did not start. Check ${TUNNEL_LOG}, or run it manually:  sudo ios tunnel start`,
+  );
 }
 
 export function stopTunnel(): boolean {
