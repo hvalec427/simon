@@ -12,7 +12,7 @@ Built entirely with AI (Claude).
 curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 ```
 
-Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating & completions](docs/updating.md) for channels (stable/nightly) and shell completions.
+Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
 
 ## Uninstall
 
@@ -38,7 +38,6 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` / `simon update` | Check for / install a newer version |
-| `simon completions zsh` | Print a zsh completion script |
 
 Run any command with `--help` for its flags.
 
@@ -63,7 +62,7 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 - [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
-- [Updating & completions](docs/updating.md) — release channels, self-update, zsh completions
+- [Updating](docs/updating.md) — release channels, self-update
 
 ## Requirements
 
