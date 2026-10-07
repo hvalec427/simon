@@ -32,6 +32,15 @@ enum Command {
         #[arg(short, long)]
         android: bool,
     },
+    /// Create a simulator or emulator
+    Create {
+        /// Create an iOS simulator
+        #[arg(short, long)]
+        ios: bool,
+        /// Create an Android emulator
+        #[arg(short, long)]
+        android: bool,
+    },
     /// Show currently running simulators and emulators
     Running,
     /// Launch a simulator or emulator (picks from a list if no flag/name given)
@@ -129,6 +138,7 @@ fn main() {
     let cli = Cli::parse();
     match cli.command {
         Command::List { ios, android } => commands::list::run(ios, android),
+        Command::Create { ios, android } => commands::create::run(ios, android),
         Command::Running => commands::running::run(),
         Command::Launch { ios, android, name } => commands::launch::run(ios, android, name),
         Command::Stop { ios, android, name } => commands::stop::run(ios, android, name),

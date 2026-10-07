@@ -148,6 +148,92 @@ pub fn open_url_on_physical_ios(udid: &str, url: &str, bundle_id: Option<&str>, 
     Ok(())
 }
 
+#[derive(Debug, Clone)]
+pub struct DeviceType {
+    pub name: String,
+    pub identifier: String,
+}
+impl std::fmt::Display for DeviceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Runtime {
+    pub name: String,
+    pub identifier: String,
+    pub version: String,
+}
+impl std::fmt::Display for Runtime {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Deserialize)]
+struct DeviceTypesList {
+    devicetypes: Vec<DeviceTypeRaw>,
+}
+#[derive(Deserialize)]
+struct DeviceTypeRaw {
+    name: String,
+    identifier: String,
+}
+
+#[derive(Deserialize)]
+struct RuntimesList {
+    runtimes: Vec<RuntimeRaw>,
+}
+#[derive(Deserialize)]
+struct RuntimeRaw {
+    name: String,
+    identifier: String,
+    version: String,
+    #[serde(rename = "isAvailable", default)]
+    is_available: bool,
+}
+
+pub fn list_device_types() -> Vec<DeviceType> {
+    let out = match Command::new("xcrun").args(["simctl", "list", "devicetypes", "--json"]).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        _ => return Vec::new(),
+    };
+    let data: DeviceTypesList = match serde_json::from_slice(&out) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    data.devicetypes
+        .into_iter()
+        .filter(|d| d.name.contains("iPhone") || d.name.contains("iPad"))
+        .map(|d| DeviceType { name: d.name, identifier: d.identifier })
+        .collect()
+}
+
+pub fn list_runtimes() -> Vec<Runtime> {
+    let out = match Command::new("xcrun").args(["simctl", "list", "runtimes", "--json"]).output() {
+        Ok(o) if o.status.success() => o.stdout,
+        _ => return Vec::new(),
+    };
+    let data: RuntimesList = match serde_json::from_slice(&out) {
+        Ok(d) => d,
+        Err(_) => return Vec::new(),
+    };
+    data.runtimes
+        .into_iter()
+        .filter(|r| r.is_available && r.name.contains("iOS"))
+        .map(|r| Runtime { name: r.name, identifier: r.identifier, version: r.version })
+        .collect()
+}
+
+pub fn create_simulator(name: &str, device_type: &str, runtime: &str) -> anyhow::Result<String> {
+    let out = Command::new("xcrun").args(["simctl", "create", name, device_type, runtime]).output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
 pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let tmp = std::env::temp_dir().join("simon-devicectl.json");
     let status = Command::new("xcrun")

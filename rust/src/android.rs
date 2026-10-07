@@ -1,6 +1,7 @@
 //! Android device discovery via the SDK's `emulator` and `adb`. Mirrors the
 //! TypeScript `utils/android.ts`.
 
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -117,6 +118,109 @@ fn find_avdmanager() -> String {
         .find(|p| p.exists())
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|| "avdmanager".to_string())
+}
+
+#[derive(Debug, Clone)]
+pub struct DeviceDefinition {
+    pub id: String,
+    pub name: String,
+}
+impl std::fmt::Display for DeviceDefinition {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SystemImage {
+    pub api: String,
+    pub package: String,
+    pub label: String,
+}
+impl std::fmt::Display for SystemImage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.label)
+    }
+}
+
+pub fn list_device_definitions() -> Vec<DeviceDefinition> {
+    let out = match output(&find_avdmanager(), &["list", "device"]) {
+        Some(o) => o,
+        None => return Vec::new(),
+    };
+    const SKIP: [&str; 6] = ["automotive", "tv_", "glass", "wear", "desktop", "chromebook"];
+    let mut devices = Vec::new();
+    let mut current_id: Option<String> = None;
+    for line in out.lines() {
+        if let Some(rest) = line.strip_prefix("id: ") {
+            // `id: 17 or "pixel_7"`
+            if let Some(start) = rest.find('"') {
+                if let Some(end) = rest[start + 1..].find('"') {
+                    current_id = Some(rest[start + 1..start + 1 + end].to_string());
+                }
+            }
+            continue;
+        }
+        let trimmed = line.trim_start();
+        if let Some(name) = trimmed.strip_prefix("Name:") {
+            if let Some(id) = current_id.take() {
+                if !SKIP.iter().any(|s| id.starts_with(s)) {
+                    devices.push(DeviceDefinition { id, name: name.trim().to_string() });
+                }
+            }
+        }
+    }
+    devices
+}
+
+pub fn list_installed_system_images() -> Vec<SystemImage> {
+    let dir = sdk_root().join("system-images");
+    let mut images = Vec::new();
+    let api_dirs = match std::fs::read_dir(&dir) {
+        Ok(d) => d,
+        Err(_) => return images,
+    };
+    for api in api_dirs.flatten().filter(|e| e.path().is_dir()) {
+        let api_name = api.file_name().to_string_lossy().into_owned();
+        let api_num = api_name.replace("android-", "");
+        let variants = match std::fs::read_dir(api.path()) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        for variant in variants.flatten().filter(|e| e.path().is_dir()) {
+            let variant_name = variant.file_name().to_string_lossy().into_owned();
+            if let Ok(archs) = std::fs::read_dir(variant.path()) {
+                for arch in archs.flatten().filter(|e| e.path().is_dir()) {
+                    let arch_name = arch.file_name().to_string_lossy().into_owned();
+                    images.push(SystemImage {
+                        api: api_num.clone(),
+                        package: format!("system-images;{api_name};{variant_name};{arch_name}"),
+                        label: format!("API {api_num}  {variant_name}  ({arch_name})"),
+                    });
+                }
+            }
+        }
+    }
+    images.sort_by(|a, b| b.api.parse::<i32>().unwrap_or(0).cmp(&a.api.parse::<i32>().unwrap_or(0)));
+    images
+}
+
+pub fn create_avd(name: &str, device_id: &str, system_image: &str) -> anyhow::Result<()> {
+    let mut child = Command::new(find_avdmanager())
+        .args(["create", "avd", "-n", name, "-k", system_image, "-d", device_id])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    // avdmanager asks whether to use a custom hardware profile — answer "no".
+    if let Some(mut stdin) = child.stdin.take() {
+        let _ = stdin.write_all(b"no\n");
+    }
+    let out = child.wait_with_output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
 }
 
 pub fn launch_avd(name: &str) -> anyhow::Result<()> {
