@@ -12,6 +12,7 @@ mod ios;
 mod push;
 mod pushconfig;
 mod rn;
+mod rnclient;
 mod rntui;
 mod update;
 
