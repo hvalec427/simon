@@ -91,11 +91,17 @@ export function netView(records: NetRecord[], filter: string, errorsOnly: boolea
   return out;
 }
 
+// Single-quote for the shell so nothing inside is expanded — crucial for
+// GraphQL bodies full of $variables, which double quotes would let the shell eat.
+function shQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
 // A copy-pasteable curl command for a captured request.
 export function toCurl(rec: NetRecord): string {
-  const parts = [`curl -X ${rec.method} ${JSON.stringify(rec.url)}`];
-  for (const [k, v] of Object.entries(rec.reqHeaders ?? {})) parts.push(`-H ${JSON.stringify(`${k}: ${v}`)}`);
-  if (rec.reqBody) parts.push(`--data ${JSON.stringify(rec.reqBody)}`);
+  const parts = [`curl -X ${rec.method} ${shQuote(rec.url)}`];
+  for (const [k, v] of Object.entries(rec.reqHeaders ?? {})) parts.push(`-H ${shQuote(`${k}: ${v}`)}`);
+  if (rec.reqBody) parts.push(`--data ${shQuote(rec.reqBody)}`);
   return parts.join(' \\\n  ');
 }
 

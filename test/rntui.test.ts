@@ -340,7 +340,7 @@ describe('netView', () => {
 });
 
 describe('toCurl', () => {
-  it('builds a curl command with method, headers and body', () => {
+  it('builds a curl command with method, headers and body (single-quoted)', () => {
     const out = toCurl({
       id: '1',
       method: 'POST',
@@ -348,9 +348,17 @@ describe('toCurl', () => {
       reqHeaders: { 'content-type': 'application/json' },
       reqBody: '{"a":1}',
     });
-    expect(out).toContain('curl -X POST "https://api/x"');
-    expect(out).toContain('-H "content-type: application/json"');
-    expect(out).toContain('--data "{\\"a\\":1}"');
+    expect(out).toContain(`curl -X POST 'https://api/x'`);
+    expect(out).toContain(`-H 'content-type: application/json'`);
+    expect(out).toContain(`--data '{"a":1}'`);
+  });
+  it('single-quotes so GraphQL $variables are not eaten by the shell', () => {
+    const out = toCurl({ id: '2', method: 'POST', url: 'u', reqBody: '{"query":"query Q($id: ID!){x}"}' });
+    expect(out).toContain(`--data '{"query":"query Q($id: ID!){x}"}'`);
+  });
+  it('escapes embedded single quotes safely', () => {
+    const out = toCurl({ id: '3', method: 'POST', url: 'u', reqBody: `{"s":"it's"}` });
+    expect(out).toContain(`'{"s":"it'\\''s"}'`);
   });
 });
 
