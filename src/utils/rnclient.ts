@@ -64,11 +64,37 @@ interface RemoteObject {
   objectId?: string;
 }
 
-function remoteValue(v: RemoteObject): string {
-  if (v == null) return '';
-  if (v.value !== undefined) return typeof v.value === 'string' ? v.value : JSON.stringify(v.value);
-  if (v.description) return v.description;
-  return v.type ?? '';
+// A value that should be printed verbatim (unquoted) in the JS output — e.g.
+// `undefined`, `ƒ ()`, `NaN`, or a depth-truncated `{…}`.
+class Raw {
+  constructor(public text: string) {}
+}
+
+function firstLine(s?: string): string {
+  return (s ?? '').split('\n')[0].trim();
+}
+
+const IDENT = /^[A-Za-z_$][\w$]*$/;
+
+// Pretty-print a reconstructed value as a JS object/array literal.
+function formatJs(value: unknown, indent = ''): string {
+  if (value instanceof Raw) return value.text;
+  if (value === null) return 'null';
+  if (typeof value === 'string') return JSON.stringify(value);
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value);
+  const next = indent + '  ';
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '[]';
+    const items = value.map(v => `${next}${formatJs(v === undefined ? new Raw('undefined') : v, next)}`);
+    return `[\n${items.join(',\n')}\n${indent}]`;
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (entries.length === 0) return '{}';
+    const body = entries.map(([k, v]) => `${next}${IDENT.test(k) ? k : JSON.stringify(k)}: ${formatJs(v, next)}`);
+    return `{\n${body.join(',\n')}\n${indent}}`;
+  }
+  return String(value);
 }
 
 function previewToString(p: ObjectPreview): string {
@@ -225,36 +251,57 @@ export class RnClient extends EventEmitter {
     return { fps, heapUsed, heapTotal };
   }
 
-  // Lazily expand an object's properties (deep) via Runtime.getProperties —
-  // objectIds are only valid while the runtime still holds them.
+  // Lazily expand object args (deep) via Runtime.getProperties and render them as
+  // real, pretty-printed JS objects/arrays. objectIds are only valid while the
+  // runtime still holds them.
   async getObjectTree(key: string, objectIds: string[], depth = 4): Promise<string[]> {
     const conn = this.conns.get(key);
     if (!conn?.ws || !conn.connected) return ['(device not connected — reconnect to inspect)'];
     const lines: string[] = [];
-    for (const oid of objectIds) lines.push(...(await this.expandObject(conn, oid, depth, '')));
+    for (let i = 0; i < objectIds.length; i++) {
+      const value = await this.buildValue(conn, { type: 'object', objectId: objectIds[i] }, depth);
+      if (i > 0) lines.push('');
+      lines.push(...formatJs(value).split('\n'));
+    }
     return lines;
   }
 
-  private async expandObject(conn: Conn, objectId: string, depth: number, indent: string): Promise<string[]> {
+  // Reconstruct a plain JS value from a RemoteObject, recursing into objects and
+  // arrays. Non-serializable values (functions, dates, depth-limited objects)
+  // become Raw markers so they render unquoted.
+  private async buildValue(conn: Conn, v: RemoteObject, depth: number): Promise<unknown> {
+    if (v == null) return null;
+    if (v.type === 'undefined') return new Raw('undefined');
+    if (v.type === 'function') return new Raw(`ƒ ${firstLine(v.description) || '()'}`);
+    if (v.type === 'symbol') return new Raw(v.description ?? 'Symbol()');
+    if (v.unserializableValue !== undefined) return new Raw(v.unserializableValue); // NaN, Infinity, -0, bigint
+    if (v.value !== undefined) return v.value; // primitive: string | number | boolean | null
+    if (v.type !== 'object') return v.description ?? v.type ?? null;
+    if (v.subtype === 'null') return null;
+    // Opaque object kinds: show their description rather than cracking them open.
+    if (v.subtype && ['date', 'regexp', 'error', 'map', 'set', 'weakmap', 'weakset', 'proxy', 'promise', 'node'].includes(v.subtype)) {
+      return new Raw(firstLine(v.description) || v.subtype);
+    }
+    if (!v.objectId || depth <= 0) return new Raw(v.subtype === 'array' ? '[…]' : firstLine(v.description) || '{…}');
+
     let res: any;
     try {
-      res = await this.request(conn, 'Runtime.getProperties', { objectId, ownProperties: true });
+      res = await this.request(conn, 'Runtime.getProperties', { objectId: v.objectId, ownProperties: true });
     } catch {
-      return [`${indent}(unavailable — object no longer in memory)`];
+      return new Raw('(unavailable — no longer in memory)');
     }
     const props = ((res?.result ?? []) as any[]).filter(p => p.value && p.enumerable !== false);
-    if (!props.length) return [`${indent}(no properties)`];
-    const out: string[] = [];
-    for (const p of props.slice(0, 200)) {
-      const v = p.value as RemoteObject;
-      if (v.type === 'object' && v.objectId && depth > 0) {
-        out.push(`${indent}${p.name}: ${v.description ?? (v.subtype === 'array' ? 'Array' : 'Object')}`);
-        out.push(...(await this.expandObject(conn, v.objectId, depth - 1, indent + '  ')));
-      } else {
-        out.push(`${indent}${p.name}: ${remoteValue(v)}`);
+    if (v.subtype === 'array') {
+      const arr: unknown[] = [];
+      for (const p of props) {
+        if (!/^\d+$/.test(p.name)) continue; // skip "length" and non-index keys
+        arr[Number(p.name)] = await this.buildValue(conn, p.value as RemoteObject, depth - 1);
       }
+      return arr;
     }
-    return out;
+    const obj: Record<string, unknown> = {};
+    for (const p of props.slice(0, 200)) obj[p.name] = await this.buildValue(conn, p.value as RemoteObject, depth - 1);
+    return obj;
   }
 
   private request(conn: Conn, method: string, params: object): Promise<any> {
