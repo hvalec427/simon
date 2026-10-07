@@ -31,7 +31,9 @@ npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64
 # the two binaries and a VERSION file, force-pushed. No merge into history, so
 # old build blobs become unreferenced and get GC'd.
 printf '%s\n' "${VERSION}" > VERSION
-GIT_INDEX_FILE="$(mktemp)"
+# A fresh (non-existent) index path — git must create it; an empty file is
+# rejected as "index file smaller than expected".
+GIT_INDEX_FILE="$(mktemp -u)"
 export GIT_INDEX_FILE
 BLOB_ARM=$(git hash-object -w simon-darwin-arm64)
 BLOB_X64=$(git hash-object -w simon-darwin-x64)
