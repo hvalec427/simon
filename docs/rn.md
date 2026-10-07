@@ -117,7 +117,7 @@ Three tiled panes plus a status bar:
 | `esc` | leave input mode |
 | `↑↓` / `jk`, `b` | *(Devices)* select, then boot the selected device |
 | `o` | *(Devices)* open the configured `openLink` on the selected device, delivered straight to the app when `bundleId` is set |
-| `q` / `Ctrl-C` | quit (stops the processes simon started) |
+| `q` / `Ctrl-C` | quit — asks `y/n` first, then stops the processes simon started |
 
 **Driving Metro.** Focus the Processes pane, press `⏎`, and every key goes
 straight to Metro — exactly like a normal terminal, so `r`, `d`, `j` and anything
