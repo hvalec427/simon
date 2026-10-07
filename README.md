@@ -14,6 +14,8 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh |
 
 Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating & completions](docs/updating.md) for channels (stable/nightly) and shell completions.
 
+> **Gatekeeper:** the binary is ad-hoc signed but not notarized, so a copy downloaded via a **browser** may be blocked ("Apple could not verify…"). The `install.sh` and `simon update` paths clear this automatically; for a manual browser download, run `xattr -dr com.apple.quarantine /usr/local/bin/simon` (or Right-click → Open once).
+
 ## Uninstall
 
 ```sh

@@ -43,6 +43,9 @@ URL="https://github.com/$REPO/releases/download/$VERSION/$FILE"
 echo "Installing simon $VERSION ($ARCH) to $INSTALL_PATH..."
 curl -fsSL "$URL" -o /tmp/simon
 chmod +x /tmp/simon
+# Strip the macOS quarantine flag so Gatekeeper doesn't block the (un-notarized)
+# binary with "Apple could not verify ... free of malware". No-op off macOS.
+xattr -d com.apple.quarantine /tmp/simon 2>/dev/null || true
 
 # Only use sudo when the target directory isn't writable.
 if [ -w "$INSTALL_DIR" ]; then

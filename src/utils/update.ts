@@ -153,6 +153,13 @@ export async function downloadBinary(tag: string): Promise<string> {
   const tmp = '/tmp/simon-update';
   writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
   chmodSync(tmp, 0o755);
+  // Strip the macOS quarantine flag so Gatekeeper doesn't block the
+  // (un-notarized) binary with "Apple could not verify …".
+  try {
+    execSync(`xattr -d com.apple.quarantine "${tmp}"`, { stdio: 'ignore' });
+  } catch {
+    /* not quarantined (the usual case for a curl/fetch download) — fine */
+  }
   return tmp;
 }
 
