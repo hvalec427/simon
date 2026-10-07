@@ -16,6 +16,9 @@ pub struct RawTarget {
     pub description: Option<String>,
     #[serde(rename = "deviceName", default)]
     pub device_name: Option<String>,
+    /// JS engine reported by the inspector (e.g. "Hermes").
+    #[serde(default)]
+    pub vm: Option<String>,
 }
 
 impl RawTarget {

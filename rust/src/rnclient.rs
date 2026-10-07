@@ -24,6 +24,7 @@ pub struct LogEntry {
     pub level: String, // log | warn | error | info | ...
     pub text: String,
     pub expanded: Option<Vec<String>>, // deep object tree (already fetched), if any
+    pub stack: Option<Vec<String>>,    // call frames ("fn (file:line)"), for exceptions
 }
 
 #[derive(Debug, Clone, Default)]
@@ -39,12 +40,17 @@ pub struct NetRecord {
     pub res_body: Option<String>,
     pub start_ts: Option<f64>,
     pub duration_ms: Option<f64>,
+    pub size: Option<i64>,       // bytes over the wire (encodedDataLength)
+    pub failed: Option<String>,  // error text when the request failed
+    pub is_ws: bool,             // a WebSocket connection
+    pub ws_frames: Vec<(bool, String)>, // (sent?, payload) for WS frames
 }
 
 #[derive(Debug, Clone)]
 pub struct TargetInfo {
     pub key: String,
     pub label: String,
+    pub meta: Option<String>, // app/device/engine metadata for the header
 }
 
 #[derive(Debug, Clone, Default)]
@@ -102,7 +108,7 @@ fn poll_loop(port: u16, tx: Sender<RnEvent>, senders: Arc<Mutex<HashMap<String, 
     loop {
         if let Ok(targets) = fetch_targets(port) {
             let live: Vec<_> = targets.into_iter().filter(|t| t.web_socket_debugger_url.is_some()).collect();
-            let infos: Vec<TargetInfo> = live.iter().map(|t| TargetInfo { key: t.key(), label: t.label() }).collect();
+            let infos: Vec<TargetInfo> = live.iter().map(|t| TargetInfo { key: t.key(), label: t.label(), meta: t.vm.clone() }).collect();
             let _ = tx.send(RnEvent::Targets(infos));
             for t in live {
                 let key = t.key();
@@ -226,19 +232,21 @@ fn handle_message(
                     }
                 }
             }
-            let _ = tx.send(RnEvent::Log(key.into(), LogEntry { kind: "console".into(), level, text, expanded }));
+            let stack = stack_frames(&p["stackTrace"]);
+            let _ = tx.send(RnEvent::Log(key.into(), LogEntry { kind: "console".into(), level, text, expanded, stack }));
         }
         "Log.entryAdded" => {
             let e = &msg["params"]["entry"];
             let _ = tx.send(RnEvent::Log(
                 key.into(),
-                LogEntry { kind: "console".into(), level: e["level"].as_str().unwrap_or("log").into(), text: e["text"].as_str().unwrap_or("").into(), expanded: None },
+                LogEntry { kind: "console".into(), level: e["level"].as_str().unwrap_or("log").into(), text: e["text"].as_str().unwrap_or("").into(), expanded: None, stack: stack_frames(&e["stackTrace"]) },
             ));
         }
         "Runtime.exceptionThrown" => {
             let d = &msg["params"]["exceptionDetails"];
             let text = d["exception"]["description"].as_str().or_else(|| d["text"].as_str()).unwrap_or("Uncaught exception").to_string();
-            let _ = tx.send(RnEvent::Log(key.into(), LogEntry { kind: "console".into(), level: "error".into(), text, expanded: None }));
+            let stack = stack_frames(&d["stackTrace"]);
+            let _ = tx.send(RnEvent::Log(key.into(), LogEntry { kind: "console".into(), level: "error".into(), text, expanded: None, stack }));
         }
         "Runtime.executionContextsCleared" => {
             records.clear();
@@ -283,11 +291,12 @@ fn handle_network(
                 let _ = tx.send(RnEvent::Net(key.into(), rec.clone()));
             }
         }
-        "Network.loadingFinished" | "Network.loadingFailed" => {
+        "Network.loadingFinished" => {
             if let Some(rec) = records.get_mut(&id) {
                 if let (Some(start), Some(end)) = (rec.start_ts, p["timestamp"].as_f64()) {
                     rec.duration_ms = Some(((end - start) * 1000.0).max(0.0));
                 }
+                rec.size = p["encodedDataLength"].as_f64().map(|b| b as i64);
                 // Proactively fetch the response body (request/response correlated inline).
                 *seq += 1;
                 let req_id = *seq;
@@ -305,8 +314,55 @@ fn handle_network(
                 let _ = tx.send(RnEvent::Net(key.into(), rec.clone()));
             }
         }
+        "Network.loadingFailed" => {
+            if let Some(rec) = records.get_mut(&id) {
+                if let (Some(start), Some(end)) = (rec.start_ts, p["timestamp"].as_f64()) {
+                    rec.duration_ms = Some(((end - start) * 1000.0).max(0.0));
+                }
+                rec.failed = Some(p["errorText"].as_str().unwrap_or("request failed").to_string());
+                let _ = tx.send(RnEvent::Net(key.into(), rec.clone()));
+            }
+        }
+        // WebSocket traffic (GraphQL subscriptions, live sockets).
+        "Network.webSocketCreated" => {
+            let rec = NetRecord { id: id.clone(), method: "WS".into(), url: p["url"].as_str().unwrap_or("").into(), is_ws: true, start_ts: p["timestamp"].as_f64(), ..Default::default() };
+            records.insert(id.clone(), rec.clone());
+            let _ = tx.send(RnEvent::Net(key.into(), rec));
+        }
+        "Network.webSocketFrameSent" | "Network.webSocketFrameReceived" => {
+            if let Some(rec) = records.get_mut(&id) {
+                let sent = method == "Network.webSocketFrameSent";
+                let fr = &p["response"];
+                let payload = match fr["opcode"].as_i64() {
+                    Some(1) | None => fr["payloadData"].as_str().unwrap_or("").to_string(),
+                    Some(2) => format!("[binary {} bytes]", fr["payloadData"].as_str().map(|s| s.len()).unwrap_or(0)),
+                    Some(op) => format!("[opcode {op}]"),
+                };
+                rec.ws_frames.push((sent, payload));
+                let _ = tx.send(RnEvent::Net(key.into(), rec.clone()));
+            }
+        }
         _ => {}
     }
+}
+
+/// Flatten a CDP stackTrace into `function (url:line)` strings.
+fn stack_frames(st: &Value) -> Option<Vec<String>> {
+    let frames = st.get("callFrames")?.as_array()?;
+    if frames.is_empty() {
+        return None;
+    }
+    let out: Vec<String> = frames
+        .iter()
+        .map(|f| {
+            let name = f["functionName"].as_str().filter(|s| !s.is_empty()).unwrap_or("<anonymous>");
+            let url = f["url"].as_str().unwrap_or("");
+            let line = f["lineNumber"].as_i64().map(|l| l + 1).unwrap_or(0);
+            let loc = url.rsplit('/').next().unwrap_or(url);
+            format!("  at {name} ({loc}:{line})")
+        })
+        .collect();
+    Some(out)
 }
 
 /// Read frames until the response with `id` arrives (bounded), returning its `result`.

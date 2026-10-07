@@ -54,8 +54,25 @@ fn fmt_duration(ms: Option<f64>) -> String {
     }
 }
 
+fn human_bytes(n: i64) -> String {
+    let f = n as f64;
+    if f >= 1_048_576.0 {
+        format!("{:.1} MB", f / 1_048_576.0)
+    } else if f >= 1024.0 {
+        format!("{:.1} KB", f / 1024.0)
+    } else {
+        format!("{n} B")
+    }
+}
+
 pub fn net_summary(rec: &NetRecord) -> String {
-    let status = rec.status.map(|s| s.to_string()).unwrap_or_else(|| "···".into());
+    let status = if rec.failed.is_some() {
+        "FAIL".into()
+    } else if rec.is_ws {
+        "WS".into()
+    } else {
+        rec.status.map(|s| s.to_string()).unwrap_or_else(|| "···".into())
+    };
     let dur = fmt_duration(rec.duration_ms);
     let op = graphql_operation(rec);
     let mut s = format!("{status}  {} {}", rec.method, rec.url);
@@ -65,11 +82,17 @@ pub fn net_summary(rec: &NetRecord) -> String {
     if let Some(op) = op {
         s.push_str(&format!("  {op}"));
     }
+    if rec.is_ws && !rec.ws_frames.is_empty() {
+        s.push_str(&format!("  {} frames", rec.ws_frames.len()));
+    }
+    if let Some(sz) = rec.size {
+        s.push_str(&format!("  {}", human_bytes(sz)));
+    }
     s
 }
 
 fn net_error(rec: &NetRecord) -> bool {
-    rec.status.map(|s| s >= 400).unwrap_or(false)
+    rec.failed.is_some() || rec.status.map(|s| s >= 400).unwrap_or(false)
 }
 
 fn sh_quote(s: &str) -> String {
@@ -101,15 +124,22 @@ fn pretty_or_raw(body: &str) -> Vec<String> {
 }
 
 fn log_detail_lines(e: &LogEntry) -> Vec<String> {
-    if let Some(tree) = &e.expanded {
+    let mut out = if let Some(tree) = &e.expanded {
         let mut out = vec![e.text.clone(), String::new()];
         out.extend(tree.clone());
-        return out;
+        out
+    } else {
+        match serde_json::from_str::<serde_json::Value>(&e.text) {
+            Ok(v) => format_js(&v, "").lines().map(String::from).collect(),
+            Err(_) => e.text.lines().map(String::from).collect(),
+        }
+    };
+    if let Some(stack) = &e.stack {
+        out.push(String::new());
+        out.push("── Stack ──".into());
+        out.extend(stack.clone());
     }
-    match serde_json::from_str::<serde_json::Value>(&e.text) {
-        Ok(v) => format_js(&v, "").lines().map(String::from).collect(),
-        Err(_) => e.text.lines().map(String::from).collect(),
-    }
+    out
 }
 
 fn net_detail_lines(rec: &NetRecord) -> Vec<String> {
@@ -122,9 +152,30 @@ fn net_detail_lines(rec: &NetRecord) -> Vec<String> {
     if let Some(m) = &rec.mime_type {
         status.push_str(&format!("  ·  {m}"));
     }
+    if let Some(sz) = rec.size {
+        status.push_str(&format!("  ·  {}", human_bytes(sz)));
+    }
     out.push(status);
+    if let Some(e) = &rec.failed {
+        out.push(format!("Error: {e}"));
+    }
     if let Some(op) = graphql_operation(rec) {
         out.push(format!("GraphQL: {op}"));
+    }
+    // WebSocket: show the frame log instead of request/response bodies.
+    if rec.is_ws {
+        out.push(String::new());
+        out.push(format!("── Frames ({}) ──", rec.ws_frames.len()));
+        if rec.ws_frames.is_empty() {
+            out.push("  (none yet)".into());
+        }
+        for (sent, payload) in &rec.ws_frames {
+            let arrow = if *sent { "↑" } else { "↓" };
+            for (i, line) in payload.lines().enumerate() {
+                out.push(if i == 0 { format!("  {arrow} {line}") } else { format!("    {line}") });
+            }
+        }
+        return out;
     }
     let section = |out: &mut Vec<String>, title: &str, headers: &[(String, String)]| {
         out.push(String::new());
@@ -415,15 +466,19 @@ impl RnView {
     }
 
     fn detail_source(&self) -> Vec<String> {
+        self.row_detail(self.eff_sel(self.rows().len()))
+    }
+
+    /// Full detail lines for the row at `idx` in the current tab's filtered list.
+    fn row_detail(&self, idx: usize) -> Vec<String> {
         let d = match self.active.as_ref().and_then(|k| self.devices.get(k)) {
             Some(d) => d,
             None => return Vec::new(),
         };
-        let sel = self.sel[self.tab_idx()];
         match self.tab {
             Tab::Logs => {
                 let list: Vec<&LogEntry> = d.logs.iter().filter(|e| self.filter.is_empty() || e.text.to_lowercase().contains(&self.filter.to_lowercase())).collect();
-                list.get(sel).map(|e| log_detail_lines(e)).unwrap_or_default()
+                list.get(idx).map(|e| log_detail_lines(e)).unwrap_or_default()
             }
             Tab::Network => {
                 let method = METHODS[self.method_idx];
@@ -433,7 +488,7 @@ impl RnView {
                     .iter()
                     .filter(|r| (f.is_empty() || net_summary(r).to_lowercase().contains(&f)) && (!self.errors_only || net_error(r)) && (method == "ALL" || r.method.to_uppercase() == method))
                     .collect();
-                list.get(sel).map(|r| net_detail_lines(r)).unwrap_or_default()
+                list.get(idx).map(|r| net_detail_lines(r)).unwrap_or_default()
             }
             Tab::Perf => Vec::new(),
         }
@@ -472,7 +527,7 @@ fn sel_style() -> Style {
 }
 
 fn in_range(range: Option<(usize, usize)>, i: usize) -> bool {
-    range.map_or(false, |(lo, hi)| i >= lo && i <= hi)
+    range.is_some_and(|(lo, hi)| i >= lo && i <= hi)
 }
 
 /// Build a styled line, highlighting search matches (current row → yellow,
@@ -593,7 +648,10 @@ fn render_view(view: &mut RnView, frame: &mut Frame, area: Rect) {
         net_filters = format!(" · {}", parts.join("+"));
     }
     let filter_str = if view.filter.is_empty() { String::new() } else { format!(" · filter:\"{}\"", view.filter) };
-    let head = format!(" {who} · {status}{filter_str}{net_filters} · {restart}   {tabbar}");
+    // App/device engine metadata for the active target (e.g. "Hermes").
+    let meta = view.targets.iter().find(|t| Some(&t.key) == view.active.as_ref()).and_then(|t| t.meta.clone());
+    let meta_str = meta.map(|m| format!(" · {m}")).unwrap_or_default();
+    let head = format!(" {who} · {status}{meta_str}{filter_str}{net_filters} · {restart}   {tabbar}");
 
     // Blank the key footer when another pane has focus (embedded in the dashboard).
     let foot = if view.focused { footer(view, is_logs) } else { String::new() };
@@ -743,7 +801,8 @@ fn footer(view: &RnView, is_logs: bool) -> String {
             let nn = if view.search.is_empty() { "" } else { " · n/N" };
             let scroll = if view.follow { "on" } else { "off" };
             let netf = if is_logs { "" } else { " · e errors · m method" };
-            format!(" [ ] tabs · 1-9 dev · / search{nn} · f filter · ⏎ preview · z max · V select · y copy{netf} · space/a scroll:{scroll} · c clear · R reload · q quit")
+            let restart = if view.clear_on_restart { "clear" } else { "keep" };
+            format!(" [ ] tabs · 1-9 dev · jk/g/G move · / search{nn} · f filter · ⏎ preview · z max · V select · y copy{netf} · space/a scroll:{scroll} · c clear · p restart:{restart} · R reload · q quit")
         }
     }
 }
@@ -864,10 +923,12 @@ fn yank_visual(view: &mut RnView) -> bool {
         let (lo, hi) = (anchor.min(cursor), anchor.max(cursor));
         lines.get(lo..=hi).map(|s| s.join("\n")).unwrap_or_default()
     } else {
-        let rows = view.rows();
-        let eff = view.eff_sel(rows.len());
-        let (lo, hi) = (anchor.min(eff), anchor.max(eff));
-        rows.iter().enumerate().filter(|(i, _)| *i >= lo && *i <= hi).map(|(_, (t, _, _))| t.clone()).collect::<Vec<_>>().join("\n")
+        // Copy each selected row's full detail (request/response, log + object
+        // tree), not just the summary line.
+        let len = view.rows().len();
+        let eff = view.eff_sel(len);
+        let (lo, hi) = (anchor.min(eff), anchor.max(eff).min(len.saturating_sub(1)));
+        (lo..=hi).map(|i| view.row_detail(i).join("\n")).collect::<Vec<_>>().join("\n\n")
     };
     yank(view, text);
     view.visual = None;
