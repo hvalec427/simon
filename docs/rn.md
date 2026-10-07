@@ -51,7 +51,11 @@ entry looks like:
       "metro":   { "command": "yarn start", "port": 8081 },
       "ios":     { "command": "yarn ios", "bundleId": "com.myapp" },
       "android": { "command": "yarn android", "bundleId": "com.myapp" },
-      "openLink": "https://myapp.com/home",// optional; `o` opens it on a device
+      "openLink": "https://myapp.com/home",// optional `o` fallback when no bundleId
+      "deeplinks": [                       // optional; the `l` quick-picker
+        "myapp://home",
+        { "name": "Order 42", "url": "myapp://orders/42" }
+      ],
       "env": { "FOO": "bar" }             // optional, merged into every command
     }
   ]
@@ -88,7 +92,8 @@ build command against whatever's booted.
 | `ios.bundleId` | no | — | App bundle id; when set, `o` delivers the link straight to the app on a **physical** iPhone instead of Safari. |
 | `android.command` | no | `<pm> run android` / `<pm> android` | Build & run command for Android. |
 | `android.bundleId` | no | — | Application id; when set, `o` routes the link to that package instead of a browser/chooser. |
-| `openLink` | no | — | A universal/deep link that opens the app; `o` fires it at the selected device. |
+| `openLink` | no | — | Fallback link for `o` when the platform has no `bundleId`. |
+| `deeplinks` | no | `[]` | Links for the `l` quick-picker — each a URL string or `{ "name", "url" }`. |
 | `env` | no | `{}` | Extra environment variables merged into every command simon spawns. |
 
 Only `name` and `root` are mandatory — and `rn init` fills both in for you.
@@ -136,7 +141,8 @@ Each pane owns its own keys (shown in that pane's footer); only a few are global
 | `↑↓` / `jk` | select a device |
 | `⏎` | install & run the app on it (iOS or Android inferred from the device; an offline sim/emulator is launched first) |
 | `b` / `s` | start (boot) / stop (shut down) the selected simulator or emulator |
-| `o` | open the configured `openLink` on it (straight to the app when `bundleId` is set) — or, if there's no `openLink`, launch the app directly by its `bundleId` |
+| `o` | open/launch the app — by `bundleId` when set (most reliable), else via `openLink` |
+| `l` | pop up the `deeplinks` picker; press the number/letter beside a link to open it on the device |
 
 Each pane's keys show in its own footer, and only the focused pane's footer is lit
 — the others go dark so there's no clutter.

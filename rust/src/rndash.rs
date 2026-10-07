@@ -81,6 +81,7 @@ pub struct DashApp {
     v_split: u16, // % height of the top row (processes/devices) vs the logs pane
     h_split: u16, // % width of the processes pane vs devices
     confirm_quit: bool,
+    link_picker: bool, // deep-link quick-picker overlay
     quit: bool,
 }
 
@@ -203,6 +204,7 @@ impl DashApp {
             v_split: 45,
             h_split: 60,
             confirm_quit: false,
+            link_picker: false,
             quit: false,
         }
     }
@@ -375,8 +377,9 @@ impl DashApp {
         self.set_flash(msg);
     }
 
-    /// On the selected (running) device: open the configured `openLink`, or if
-    /// there's no link, launch the app directly by its `bundleId`.
+    /// `o`: open/launch the app on the selected (running) device. Prefers the
+    /// bundleId (launch the app directly — most reliable); falls back to a
+    /// configured `openLink` only when there's no bundleId for the platform.
     fn open_selected(&mut self) {
         let dev = match self.devices.get(self.dev_sel) {
             Some(d) => d.clone(),
@@ -389,22 +392,46 @@ impl DashApp {
                 return;
             }
         };
-        let url = self.project.open_link().map(String::from);
-        let ios_bundle = self.project.ios_bundle_id().map(String::from);
-        let android_pkg = self.project.android_bundle_id().map(String::from);
-        // Without a link we need the platform's bundle id to launch the app.
-        let bundle = if dev.platform == Platform::Android { &android_pkg } else { &ios_bundle };
-        if url.is_none() && bundle.is_none() {
-            self.set_flash("set \"openLink\" or a platform \"bundleId\" in rn.json");
+        let has_bundle = if dev.platform == Platform::Android {
+            self.project.android_bundle_id().is_some()
+        } else {
+            self.project.ios_bundle_id().is_some()
+        };
+        // bundleId set → launch the app (url None); otherwise fall back to openLink.
+        let url = if has_bundle { None } else { self.project.open_link().map(String::from) };
+        if url.is_none() && !has_bundle {
+            self.set_flash("set a platform \"bundleId\" (or \"openLink\") in rn.json");
             return;
         }
+        self.run_on_device(target, url, dev.label);
+    }
+
+    /// `l` picker: open the chosen deep link on the selected (running) device.
+    fn open_deeplink(&mut self, idx: usize) {
+        let url = match self.project.deeplinks.get(idx) {
+            Some(d) => d.url().to_string(),
+            None => return,
+        };
+        let dev = match self.devices.get(self.dev_sel) {
+            Some(d) => d.clone(),
+            None => return,
+        };
+        match dev.open {
+            Some(target) => self.run_on_device(target, Some(url), dev.label),
+            None => self.set_flash(format!("{} isn't running — start it first (⏎)", dev.label)),
+        }
+    }
+
+    /// Open a URL on a device, or launch its app when `url` is None. The link is
+    /// routed straight to the app via bundleId where the platform supports it.
+    fn run_on_device(&mut self, target: OpenTarget, url: Option<String>, label: String) {
         let tx = self.tx.clone();
-        let label = dev.label.clone();
+        let ios_bundle = self.project.ios_bundle_id().map(String::from);
+        let android_pkg = self.project.android_bundle_id().map(String::from);
         let verb = if url.is_some() { "opening" } else { "launching" };
         self.set_flash(format!("{verb} on {label}…"));
         std::thread::spawn(move || {
             let res = match (&url, target) {
-                // A link routes to the app (via bundle id where supported); no link → launch the app.
                 (Some(u), OpenTarget::IosSim(udid)) => ios::open_url_on_simulator(&udid, u),
                 (Some(u), OpenTarget::IosPhysical(udid)) => ios::open_url_on_physical_ios(&udid, u, ios_bundle.as_deref(), false),
                 (Some(u), OpenTarget::AndroidSerial(serial)) => android::open_url_with_package(&serial, u, android_pkg.as_deref()),
@@ -512,6 +539,21 @@ impl DashApp {
             return;
         }
 
+        // Deep-link quick-picker: a digit/letter opens that link; Esc closes.
+        if self.link_picker {
+            if key.code == KeyCode::Esc {
+                self.link_picker = false;
+            } else if let KeyCode::Char(c) = key.code {
+                if let Some(i) = picker_index(c) {
+                    if i < self.project.deeplinks.len() {
+                        self.link_picker = false;
+                        self.open_deeplink(i);
+                    }
+                }
+            }
+            return;
+        }
+
         // Processes input mode: forward raw keys to the active PTY (including
         // Ctrl-C, so you can interrupt Metro); only Esc leaves input mode.
         if self.input_mode {
@@ -605,8 +647,37 @@ impl DashApp {
             KeyCode::Char('b') => self.start_selected_device(),
             KeyCode::Char('s') => self.stop_selected_device(),
             KeyCode::Char('o') => self.open_selected(),
+            KeyCode::Char('l') => {
+                if self.project.deeplinks.is_empty() {
+                    self.set_flash("no deeplinks in rn.json");
+                } else if self.devices.get(self.dev_sel).and_then(|d| d.open.as_ref()).is_none() {
+                    self.set_flash("start the device first (⏎)");
+                } else {
+                    self.link_picker = true;
+                }
+            }
             _ => {}
         }
+    }
+}
+
+/// Quick-pick key for item `i`: 1-9, then a-z once the digits run out.
+fn picker_char(i: usize) -> Option<char> {
+    if i < 9 {
+        Some((b'1' + i as u8) as char)
+    } else if i < 9 + 26 {
+        Some((b'a' + (i - 9) as u8) as char)
+    } else {
+        None
+    }
+}
+
+/// Inverse of `picker_char`.
+fn picker_index(c: char) -> Option<usize> {
+    match c {
+        '1'..='9' => Some(c as usize - '1' as usize),
+        'a'..='z' => Some(9 + (c as usize - 'a' as usize)),
+        _ => None,
     }
 }
 
@@ -654,9 +725,35 @@ fn render(app: &mut DashApp, frame: &mut Frame) {
     render_logs(app, frame, logs_outer);
     render_status(app, frame, status_area);
 
+    if app.link_picker {
+        render_link_picker(app, frame, area);
+    }
     if app.confirm_quit {
         render_quit_popup(frame, area);
     }
+}
+
+fn render_link_picker(app: &DashApp, frame: &mut Frame, area: Rect) {
+    let links = &app.project.deeplinks;
+    let h = (links.len() as u16 + 2).clamp(3, area.height);
+    let r = centered(area, 64, h);
+    frame.render_widget(Clear, r);
+    let block = Block::default().borders(Borders::ALL).border_style(Style::default().fg(Color::Cyan)).title(" Deep links · esc ");
+    let inner = block.inner(r);
+    frame.render_widget(block, r);
+    let lines: Vec<Line> = links
+        .iter()
+        .enumerate()
+        .filter_map(|(i, d)| {
+            picker_char(i).map(|k| {
+                Line::from(vec![
+                    Span::styled(format!(" {k} "), Style::default().fg(Color::Black).bg(Color::Cyan)),
+                    Span::raw(format!("  {}", d.label())),
+                ])
+            })
+        })
+        .collect();
+    frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
 
 fn centered(area: Rect, w: u16, h: u16) -> Rect {
@@ -815,7 +912,7 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     }
     frame.render_widget(Paragraph::new(Text::from(lines)), content);
     if let Some(h) = hint {
-        render_hint(frame, h, " ↑↓ sel · ⏎ run · b start · s stop · o open", focused);
+        render_hint(frame, h, " ↑↓ sel · ⏎ run · b start · s stop · o open · l links", focused);
     }
 }
 

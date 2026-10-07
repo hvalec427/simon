@@ -70,6 +70,30 @@ pub struct MetroConfig {
     pub port: Option<u16>,
 }
 
+/// A deep link entry: either a bare URL string, or `{ "name": …, "url": … }`
+/// for a friendlier label in the picker.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum DeepLink {
+    Url(String),
+    Named { name: String, url: String },
+}
+
+impl DeepLink {
+    pub fn url(&self) -> &str {
+        match self {
+            DeepLink::Url(u) => u,
+            DeepLink::Named { url, .. } => url,
+        }
+    }
+    pub fn label(&self) -> &str {
+        match self {
+            DeepLink::Url(u) => u,
+            DeepLink::Named { name, .. } => name,
+        }
+    }
+}
+
 /// A platform's build/run command. Which device it runs on is chosen live from
 /// the dashboard's Devices pane, not pinned here. `bundle_id` is the app's
 /// bundle id (iOS) / application id (Android), used to open links straight in
@@ -99,6 +123,9 @@ pub struct ProjectConfig {
     /// the dashboard (e.g. "https://myapp.com/home" or "myapp://home").
     #[serde(rename = "openLink", default, skip_serializing_if = "Option::is_none")]
     pub open_link: Option<String>,
+    /// Deep links to pick from with `l` in the Devices pane.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub deeplinks: Vec<DeepLink>,
     /// Extra env vars merged into every command simon spawns for this project.
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
@@ -107,7 +134,7 @@ pub struct ProjectConfig {
 impl ProjectConfig {
     /// A minimal entry pointing at a root, everything else derived from defaults.
     pub fn new(name: String, root: String) -> Self {
-        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, open_link: None, env: BTreeMap::new() }
+        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, open_link: None, deeplinks: Vec::new(), env: BTreeMap::new() }
     }
 
     pub fn open_link(&self) -> Option<&str> {
