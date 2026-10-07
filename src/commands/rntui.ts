@@ -36,7 +36,9 @@ export function filterEntries(entries: LogEntry[], filter: string): LogEntry[] {
 export function filterRecords(records: NetRecord[], filter: string): NetRecord[] {
   if (!filter) return records;
   const f = filter.toLowerCase();
-  return records.filter(r => `${r.method} ${r.url}`.toLowerCase().includes(f));
+  // Match the whole row: status code, method, url, duration and GraphQL op name
+  // (netSummary already composes all of these).
+  return records.filter(r => netSummary(r).text.toLowerCase().includes(f));
 }
 
 // Extract a GraphQL operation name from a request body (operationName, else the

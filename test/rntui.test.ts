@@ -374,11 +374,21 @@ describe('graphqlOperation / netSummary', () => {
 });
 
 describe('filterRecords', () => {
-  it('filters by method/url substring', () => {
-    const recs: NetRecord[] = [sampleRec, { id: '2', method: 'POST', url: 'https://api/login' }];
-    expect(filterRecords(recs, 'login')).toHaveLength(1);
+  const recs: NetRecord[] = [
+    sampleRec, // GET https://api/orders, 404
+    { id: '2', method: 'POST', url: 'https://api/graphql', status: 200, durationMs: 1500, reqBody: '{"operationName":"ClaimOrder","query":"mutation ClaimOrder{x}"}' },
+  ];
+  it('filters by method or url substring', () => {
+    expect(filterRecords(recs, 'login')).toHaveLength(0);
     expect(filterRecords(recs, 'GET')).toHaveLength(1);
+    expect(filterRecords(recs, 'graphql')).toHaveLength(1);
     expect(filterRecords(recs, '')).toHaveLength(2);
+  });
+  it('also filters by status code, duration and GraphQL operation name', () => {
+    expect(filterRecords(recs, '404')).toHaveLength(1); // status
+    expect(filterRecords(recs, '200')).toHaveLength(1); // status
+    expect(filterRecords(recs, '1.5s')).toHaveLength(1); // duration
+    expect(filterRecords(recs, 'ClaimOrder')).toHaveLength(1); // graphql op
   });
 });
 

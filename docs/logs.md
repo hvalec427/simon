@@ -43,7 +43,7 @@ Keys drive the list:
 | `1`-`9` | switch device |
 | `↑↓` / `jk` / PgUp·PgDn / `g`·`G` | move |
 | `/` | search (jumps live to the first match; `n`/`N` next/prev) |
-| `f` | filter |
+| `f` | filter (Network: matches status code, method, url, duration, and GraphQL op) |
 | `y` | copy the selected row (a log — with its full expanded object/array tree — or a request's full detail) |
 | `space` / `a` | toggle autoscroll (stick to newest) |
 | `c` | clear |
