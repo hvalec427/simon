@@ -54,8 +54,7 @@ entry looks like:
       "deeplinks": [                       // optional; the `l` quick-picker
         "myapp://home",
         { "name": "Order 42", "url": "myapp://orders/42" }
-      ],
-      "env": { "FOO": "bar" }             // optional, merged into every command
+      ]
     }
   ]
 }
@@ -92,7 +91,6 @@ build command against whatever's booted.
 | `android.command` | no | `<pm> run android` / `<pm> android` | Build & run command for Android. |
 | `android.bundleId` | no | — | Application id; when set, `o` routes the link to that package instead of a browser/chooser. |
 | `deeplinks` | no | `[]` | Links for the `l` quick-picker — each a URL string or `{ "name", "url" }`. |
-| `env` | no | `{}` | Extra environment variables merged into every command simon spawns. |
 
 Only `name` and `root` are mandatory — and `rn init` fills both in for you.
 

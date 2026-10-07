@@ -122,15 +122,12 @@ pub struct ProjectConfig {
     /// Deep links to pick from with `l` in the Devices pane.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deeplinks: Vec<DeepLink>,
-    /// Extra env vars merged into every command simon spawns for this project.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub env: BTreeMap<String, String>,
 }
 
 impl ProjectConfig {
     /// A minimal entry pointing at a root, everything else derived from defaults.
     pub fn new(name: String, root: String) -> Self {
-        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, deeplinks: Vec::new(), env: BTreeMap::new() }
+        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, deeplinks: Vec::new() }
     }
 
     pub fn ios_bundle_id(&self) -> Option<&str> {
@@ -176,12 +173,11 @@ impl ProjectConfig {
             .unwrap_or_else(|| self.package_manager().run_command("android"))
     }
 
-    /// Env for every command simon spawns: the user's `env`, plus the Metro port
-    /// exported as `RCT_METRO_PORT` so the port is configured in exactly one place
-    /// (`metro.port`). An explicit `RCT_METRO_PORT` in `env` always wins.
+    /// Env for every command simon spawns: the Metro port exported as
+    /// `RCT_METRO_PORT`, so the port is configured in exactly one place (`metro.port`).
     pub fn command_env(&self) -> BTreeMap<String, String> {
-        let mut env = self.env.clone();
-        env.entry("RCT_METRO_PORT".to_string()).or_insert_with(|| self.metro_port().to_string());
+        let mut env = BTreeMap::new();
+        env.insert("RCT_METRO_PORT".to_string(), self.metro_port().to_string());
         env
     }
 }
@@ -270,13 +266,10 @@ mod tests {
     }
 
     #[test]
-    fn command_env_sets_metro_port_once() {
+    fn command_env_sets_metro_port() {
         let mut p = ProjectConfig::new("App".into(), "/tmp/app".into());
         p.metro = Some(MetroConfig { command: None, port: Some(9000) });
         assert_eq!(p.command_env().get("RCT_METRO_PORT").map(String::as_str), Some("9000"));
-        // An explicit env value is not overridden.
-        p.env.insert("RCT_METRO_PORT".into(), "7000".into());
-        assert_eq!(p.command_env().get("RCT_METRO_PORT").map(String::as_str), Some("7000"));
     }
 
     #[test]
