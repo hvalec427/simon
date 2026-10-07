@@ -453,6 +453,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
   let search = '';
   let mode: 'normal' | 'filter' | 'search' = 'normal';
   let input = '';
+  let searchBeforeEdit = ''; // active search to restore if a new `/` entry is cancelled
   let clearOnRestart = false;
   let targets: TargetInfo[] = [];
   let errorsOnly = false;
@@ -767,7 +768,7 @@ export function runRnTui(port: number, nameFilter?: string): void {
         mode = 'normal';
         if (search) (detail ? jumpDetail : jump)(1);
       } else if (key.name === 'escape') {
-        if (mode === 'search') search = '';
+        if (mode === 'search') search = searchBeforeEdit; // cancel: keep the previously active search
         mode = 'normal';
       } else if (key.name === 'backspace' || (str && !key.ctrl)) {
         input = key.name === 'backspace' ? input.slice(0, -1) : input + str;
@@ -812,7 +813,8 @@ export function runRnTui(port: number, nameFilter?: string): void {
       input = filter;
     } else if (str === '/') {
       mode = 'search';
-      input = search;
+      input = ''; // always start empty — don't prefill the last query
+      searchBeforeEdit = search; // the current search stays active until a new one is typed
       if (detail) {
         detailScroll = 0; // preview search (split or maximized) starts at the pane top
         detailHit = -1;
