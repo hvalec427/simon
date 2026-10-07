@@ -100,9 +100,10 @@ Three tiled panes plus a status bar:
 - **Processes** — Metro and each install/run, one sub-tab each, shown as a live
   terminal (colors and Metro's interactive menu render faithfully).
 - **Devices & Actions** — every installed simulator/emulator and connected
-  physical device, with a running marker. When a `bundleId` is configured, each
-  running device also shows whether the app is installed (`app✓`/`app✗`) and, on
-  Android, whether it's currently in the foreground (`▶fg`).
+  physical device, with a running marker. On **Android**, when `android.bundleId`
+  is set, each running device also shows whether the app is installed (`app✓`/
+  `app✗`) and whether it's in the foreground (`▶fg`). (iOS can't report these over
+  the available tooling, so they're Android-only.)
 - **JS Logs / Network / Perf** — the full `logs --rn` viewer embedded (see
   [logs](logs.md) for its keys).
 
@@ -115,6 +116,7 @@ Each pane owns its own keys (shown in that pane's footer); only a few are global
 | Key | Action |
 |---|---|
 | `⇥` / `⇧⇥` | move focus between panes |
+| `Ctrl`+`←→↑↓` | resize the panes (horizontal / vertical split) |
 | `R` / `D` | send Metro reload / dev-menu (goes to the Metro process) |
 | `q` / `Ctrl-C` | quit — asks `y/n` first, then stops the processes simon started |
 
@@ -134,7 +136,7 @@ Each pane owns its own keys (shown in that pane's footer); only a few are global
 | `↑↓` / `jk` | select a device |
 | `⏎` | install & run the app on it (iOS or Android inferred from the device; an offline sim/emulator is launched first) |
 | `b` / `s` | start (boot) / stop (shut down) the selected simulator or emulator |
-| `o` | open the configured `openLink` on it — straight to the app when `bundleId` is set |
+| `o` | open the configured `openLink` on it (straight to the app when `bundleId` is set) — or, if there's no `openLink`, launch the app directly by its `bundleId` |
 
 Each pane's keys show in its own footer, and only the focused pane's footer is lit
 — the others go dark so there's no clutter.

@@ -68,8 +68,11 @@ Keys drive the list:
 - Search highlights **every** match — the active one (where the selection / `n`·`N` sits) in **yellow**, the rest in **cyan**.
 - **Where search looks depends on the pane.** With the preview **closed**, `/` searches the list — it jumps live to the first match and `n`/`N` step the selection through every match (including ones in the status, duration, or GraphQL-op columns). With the preview **open** (split *or* maximized), `/` searches the pane from its top and `n`/`N` step through the pane's matches; the list stays put.
 - A **log with an object** shows the full nested object tree, fetched lazily via `Runtime.getProperties`; nested previews already present in the log event render inline for free.
-- A **network** row shows method, URL, status, **duration**, and (in the pane) request/response **headers and bodies** (JSON pretty-printed). Long values wrap so nothing is cut off.
+- A **network** row shows method, URL, status, **duration**, response **size**, and (in the pane) request/response **headers and bodies** (JSON pretty-printed). Long values wrap so nothing is cut off. **Failed** requests show `FAIL` and the error reason.
+- **WebSockets** appear as `WS` rows; the pane lists each frame with a direction arrow (`↑` sent, `↓` received) — handy for GraphQL subscriptions.
+- An **uncaught exception / `console.error`** shows its call stack (`function (file:line)`) in the detail pane.
 - **GraphQL** POSTs show their operation name right in the Network list (e.g. `200 POST …/graphql  GetOrders`), taken from `operationName` or the query. Requests also show their timing (e.g. `123ms`).
+- The header bar shows the active target's engine (e.g. `Hermes`) alongside its name and connection status.
 
 It **auto-reconnects** on close/crash and honours the clear-on-restart toggle on fast-refresh.
 
