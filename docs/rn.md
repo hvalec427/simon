@@ -134,7 +134,7 @@ Each pane owns its own keys (shown in that pane's footer); only a few are global
 | Key | Action |
 |---|---|
 | `↑↓` / `jk` | select a device |
-| `⏎` | install & run the app on it (iOS or Android inferred from the device; an offline sim/emulator is launched first) |
+| `⏎` | install & run the app on it — targets *that* device (iOS `--udid`, Android `--deviceId`); an offline sim/emulator is launched first |
 | `b` / `s` | start (boot) / stop (shut down) the selected simulator or emulator |
 | `o` | launch the app on the device by its `bundleId` |
 | `l` | pop up the `deeplinks` picker; press the number/letter beside a link to open it on the device |

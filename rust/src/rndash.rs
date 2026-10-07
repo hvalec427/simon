@@ -9,7 +9,7 @@
 use crate::devices::{get_all_installed, get_all_running, InstalledDevice, Platform, RunningDevice};
 use crate::proc::PtyProcess;
 use crate::rnclient::{ConnCmd, RnClient};
-use crate::rnconfig::ProjectConfig;
+use crate::rnconfig::{PackageManager, ProjectConfig};
 use crate::rnview::RnView;
 use crate::{android, ios};
 use anyhow::Result;
@@ -61,6 +61,27 @@ struct DeviceRow {
     open: Option<OpenTarget>,
     installed: Option<bool>,
     foreground: Option<bool>,
+}
+
+impl DeviceRow {
+    /// iOS device/simulator udid (known even before boot, from the boot target).
+    fn ios_udid(&self) -> Option<String> {
+        if let Some(OpenTarget::IosSim(u)) | Some(OpenTarget::IosPhysical(u)) = &self.open {
+            return Some(u.clone());
+        }
+        if let Some(BootTarget::IosSim(u)) = &self.boot {
+            return Some(u.clone());
+        }
+        None
+    }
+
+    /// Android adb serial — only known once the device/emulator is running.
+    fn android_serial(&self) -> Option<String> {
+        match &self.open {
+            Some(OpenTarget::AndroidSerial(s)) => Some(s.clone()),
+            _ => None,
+        }
+    }
 }
 
 pub struct DashApp {
@@ -260,14 +281,21 @@ impl DashApp {
         }
     }
 
-    fn run_platform(&mut self, android: bool) {
-        // Device choice is live — boot what you want from the Devices pane; this
-        // just runs the configured build command.
-        let (label, cmd) = if android {
+    fn run_platform(&mut self, android: bool, device_flag: Option<String>) {
+        let (label, mut cmd) = if android {
             ("Android", self.project.android_command())
         } else {
             ("iOS", self.project.ios_command())
         };
+        // Target the highlighted device, unless the command already names one.
+        if let Some(args) = device_flag {
+            let already = ["--udid", "--device", "--simulator", "--deviceId"].iter().any(|f| cmd.contains(f));
+            if !already {
+                // npm needs `--` to forward args to the script; yarn/pnpm don't.
+                let sep = if self.project.package_manager() == PackageManager::Npm { " -- " } else { " " };
+                cmd = format!("{cmd}{sep}{args}");
+            }
+        }
         if let Some(i) = self.spawn_proc(label, &cmd) {
             self.proc_sel = i;
             self.focus = Pane::Processes;
@@ -291,7 +319,16 @@ impl DashApp {
                 self.boot_target(target, dev.label.clone());
             }
         }
-        self.run_platform(dev.platform == Platform::Android);
+        let android = dev.platform == Platform::Android;
+        // Target this device: iOS by udid (known even pre-boot); Android by adb
+        // serial (only once running — a freshly launched emulator falls back to
+        // the RN CLI default, which is the one we just started).
+        let device_flag = if android {
+            dev.android_serial().map(|s| format!("--deviceId {s}"))
+        } else {
+            dev.ios_udid().map(|u| format!("--udid {u}"))
+        };
+        self.run_platform(android, device_flag);
     }
 
     /// Start (boot) the highlighted simulator/emulator.
