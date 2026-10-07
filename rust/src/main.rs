@@ -9,6 +9,7 @@ mod commands;
 mod devices;
 mod goios;
 mod ios;
+mod update;
 
 use clap::{Parser, Subcommand};
 
@@ -98,6 +99,30 @@ enum Command {
     },
     /// Manage the iOS developer tunnel (start | stop | status)
     Tunnel { action: Option<String> },
+    /// Check your environment for the required tooling
+    Doctor,
+    /// Check whether a newer version of simon is available
+    #[command(name = "check-update")]
+    CheckUpdate {
+        #[arg(long)]
+        stable: bool,
+        #[arg(long)]
+        nightly: bool,
+        #[arg(long)]
+        dev: bool,
+    },
+    /// Update simon to the latest version (remembers the channel)
+    Update {
+        #[arg(long)]
+        stable: bool,
+        #[arg(long)]
+        nightly: bool,
+        #[arg(long)]
+        dev: bool,
+        /// Install the channel's latest even if it's the same or an older version
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 fn main() {
@@ -116,5 +141,8 @@ fn main() {
             commands::location::run(coords, name, ios, android, reset)
         }
         Command::Tunnel { action } => commands::tunnel::run(action),
+        Command::Doctor => commands::doctor::run(),
+        Command::CheckUpdate { stable, nightly, dev } => commands::check_update::run(stable, nightly, dev),
+        Command::Update { stable, nightly, dev, force } => commands::update::run(stable, nightly, dev, force),
     }
 }
