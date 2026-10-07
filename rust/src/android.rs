@@ -264,6 +264,18 @@ pub fn open_url_with_package(serial: &str, url: &str, package: Option<&str>) -> 
     Ok(())
 }
 
+/// Launch an app by its package's default LAUNCHER activity.
+pub fn launch_app(serial: &str, package: &str) -> anyhow::Result<()> {
+    let adb = find_bin("adb");
+    let out = Command::new(&adb)
+        .args(["-s", serial, "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"])
+        .output()?;
+    if !out.status.success() {
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+    }
+    Ok(())
+}
+
 /// Whether `package` is installed on the device (`pm path` prints a path only
 /// when it is).
 pub fn app_installed(serial: &str, package: &str) -> bool {

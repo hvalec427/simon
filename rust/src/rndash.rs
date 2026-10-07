@@ -78,6 +78,8 @@ pub struct DashApp {
     tx: Sender<DashMsg>,
     flash: Option<(String, Instant)>,
     proc_area: Option<Rect>,
+    v_split: u16, // % height of the top row (processes/devices) vs the logs pane
+    h_split: u16, // % width of the processes pane vs devices
     confirm_quit: bool,
     quit: bool,
 }
@@ -96,7 +98,6 @@ impl DashApp {
         let client = RnClient::start(project.metro_port());
         // Background device poller — simctl/adb are slow, so keep them off the UI thread.
         let dev_tx = tx.clone();
-        let ios_bundle = project.ios_bundle_id().map(String::from);
         let android_bundle = project.android_bundle_id().map(String::from);
         std::thread::spawn(move || loop {
             let running_devices = get_all_running(None);
@@ -107,9 +108,8 @@ impl DashApp {
                     _ => None,
                 })
             };
-            // Is the configured app installed / in the foreground? Only probed for
-            // running devices with a bundleId set, to bound the extra shell calls.
-            let ios_installed = |udid: &str| ios_bundle.as_deref().map(|b| ios::app_installed_on_simulator(udid, b));
+            // Is the configured app installed / in the foreground? Android only —
+            // the iOS simctl probe was unreliable, so we don't check it.
             let android_state = |serial: &str| match android_bundle.as_deref() {
                 Some(pkg) => (
                     Some(android::app_installed(serial, pkg)),
@@ -129,7 +129,7 @@ impl DashApp {
                         running,
                         boot: Some(BootTarget::IosSim(udid.clone())),
                         open: running.then(|| OpenTarget::IosSim(udid.clone())),
-                        installed: if running { ios_installed(udid) } else { None },
+                        installed: None, // iOS install state not probed
                         foreground: None,
                     },
                     InstalledDevice::AndroidAvd { name, .. } => {
@@ -200,6 +200,8 @@ impl DashApp {
             tx,
             flash: None,
             proc_area: None,
+            v_split: 45,
+            h_split: 60,
             confirm_quit: false,
             quit: false,
         }
@@ -373,15 +375,9 @@ impl DashApp {
         self.set_flash(msg);
     }
 
-    /// Open the configured app link on the selected device (if it's running).
+    /// On the selected (running) device: open the configured `openLink`, or if
+    /// there's no link, launch the app directly by its `bundleId`.
     fn open_selected(&mut self) {
-        let url = match self.project.open_link() {
-            Some(u) => u.to_string(),
-            None => {
-                self.set_flash("set \"openLink\" in rn.json to use this");
-                return;
-            }
-        };
         let dev = match self.devices.get(self.dev_sel) {
             Some(d) => d.clone(),
             None => return,
@@ -393,21 +389,32 @@ impl DashApp {
                 return;
             }
         };
-        let tx = self.tx.clone();
-        let label = dev.label.clone();
+        let url = self.project.open_link().map(String::from);
         let ios_bundle = self.project.ios_bundle_id().map(String::from);
         let android_pkg = self.project.android_bundle_id().map(String::from);
-        self.set_flash(format!("opening on {label}…"));
+        // Without a link we need the platform's bundle id to launch the app.
+        let bundle = if dev.platform == Platform::Android { &android_pkg } else { &ios_bundle };
+        if url.is_none() && bundle.is_none() {
+            self.set_flash("set \"openLink\" or a platform \"bundleId\" in rn.json");
+            return;
+        }
+        let tx = self.tx.clone();
+        let label = dev.label.clone();
+        let verb = if url.is_some() { "opening" } else { "launching" };
+        self.set_flash(format!("{verb} on {label}…"));
         std::thread::spawn(move || {
-            let res = match target {
-                // simctl openurl routes by scheme; it has no bundle targeting.
-                OpenTarget::IosSim(udid) => ios::open_url_on_simulator(&udid, &url),
-                OpenTarget::IosPhysical(udid) => ios::open_url_on_physical_ios(&udid, &url, ios_bundle.as_deref(), false),
-                OpenTarget::AndroidSerial(serial) => android::open_url_with_package(&serial, &url, android_pkg.as_deref()),
+            let res = match (&url, target) {
+                // A link routes to the app (via bundle id where supported); no link → launch the app.
+                (Some(u), OpenTarget::IosSim(udid)) => ios::open_url_on_simulator(&udid, u),
+                (Some(u), OpenTarget::IosPhysical(udid)) => ios::open_url_on_physical_ios(&udid, u, ios_bundle.as_deref(), false),
+                (Some(u), OpenTarget::AndroidSerial(serial)) => android::open_url_with_package(&serial, u, android_pkg.as_deref()),
+                (None, OpenTarget::IosSim(udid)) => ios::launch_app_on_simulator(&udid, ios_bundle.as_deref().unwrap_or_default()),
+                (None, OpenTarget::IosPhysical(udid)) => ios::launch_app_on_physical_ios(&udid, ios_bundle.as_deref().unwrap_or_default()),
+                (None, OpenTarget::AndroidSerial(serial)) => android::launch_app(&serial, android_pkg.as_deref().unwrap_or_default()),
             };
             let msg = match res {
-                Ok(()) => format!("opened on {label}"),
-                Err(e) => format!("open failed on {label}: {e}"),
+                Ok(()) => format!("done on {label}"),
+                Err(e) => format!("failed on {label}: {e}"),
             };
             let _ = tx.send(DashMsg::Flash(msg));
         });
@@ -529,8 +536,14 @@ impl DashApp {
         // Global keys — work from any pane. Suppressed only while the logs viewer
         // is capturing a search/filter query (so those chars reach the query).
         let logs_capturing = self.focus == Pane::Logs && self.rnview.is_capturing_input();
+        let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
         if !logs_capturing {
             match key.code {
+                // Ctrl+arrows resize the panes.
+                KeyCode::Left if ctrl => return self.h_split = self.h_split.saturating_sub(5).max(20),
+                KeyCode::Right if ctrl => return self.h_split = (self.h_split + 5).min(80),
+                KeyCode::Up if ctrl => return self.v_split = self.v_split.saturating_sub(5).max(20),
+                KeyCode::Down if ctrl => return self.v_split = (self.v_split + 5).min(80),
                 KeyCode::Tab => return self.cycle_focus(false),
                 KeyCode::BackTab => return self.cycle_focus(true),
                 KeyCode::Char('q') => {
@@ -630,8 +643,8 @@ fn render(app: &mut DashApp, frame: &mut Frame) {
     let body = outer[0];
     let status_area = outer[1];
 
-    let halves = Layout::vertical([Constraint::Percentage(45), Constraint::Percentage(55)]).split(body);
-    let top = Layout::horizontal([Constraint::Percentage(60), Constraint::Percentage(40)]).split(halves[0]);
+    let halves = Layout::vertical([Constraint::Percentage(app.v_split), Constraint::Percentage(100 - app.v_split)]).split(body);
+    let top = Layout::horizontal([Constraint::Percentage(app.h_split), Constraint::Percentage(100 - app.h_split)]).split(halves[0]);
     let proc_outer = top[0];
     let dev_outer = top[1];
     let logs_outer = halves[1];
@@ -737,9 +750,14 @@ fn render_processes(app: &mut DashApp, frame: &mut Frame, area: Rect) {
     app.proc_area = Some(content);
 
     match app.procs.get(app.proc_sel) {
-        Some(p) => {
+        Some(p) if p.is_alive() => {
             let lines = pty_lines(&p.parser(), content.width, content.height);
             frame.render_widget(Paragraph::new(Text::from(lines)), content);
+        }
+        Some(p) => {
+            // Stopped — blank the stale terminal and say so.
+            let msg = Paragraph::new(format!("· {} stopped ·", p.label)).style(Style::default().fg(Color::DarkGray));
+            frame.render_widget(msg, content);
         }
         None => {
             let msg = Paragraph::new("Press  m  to start Metro.").style(Style::default().fg(Color::DarkGray));
@@ -818,7 +836,7 @@ fn render_status(app: &DashApp, frame: &mut Frame, area: Rect) {
     } else if app.input_mode {
         " INPUT — keys go to the process · Esc to exit".into()
     } else {
-        " ⇥ focus · R reload · D dev-menu · q quit".into()
+        " ⇥ focus · ^←→↑↓ resize · R reload · D dev-menu · q quit".into()
     };
     let w = area.width as usize;
     let padded = {

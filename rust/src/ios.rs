@@ -104,14 +104,22 @@ pub fn open_url_on_simulator(udid: &str, url: &str) -> anyhow::Result<()> {
     simctl(&["openurl", udid, url])
 }
 
-/// Whether an app with `bundle_id` is installed on a (booted or shutdown)
-/// simulator — `get_app_container` succeeds only when the app is present.
-pub fn app_installed_on_simulator(udid: &str, bundle_id: &str) -> bool {
-    Command::new("xcrun")
-        .args(["simctl", "get_app_container", udid, bundle_id])
-        .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+/// Launch (foreground) an installed app on a simulator by bundle id.
+pub fn launch_app_on_simulator(udid: &str, bundle_id: &str) -> anyhow::Result<()> {
+    simctl(&["launch", udid, bundle_id])
+}
+
+/// Launch an app on a physical device by bundle id (devicectl).
+pub fn launch_app_on_physical_ios(udid: &str, bundle_id: &str) -> anyhow::Result<()> {
+    ensure_devicectl()?;
+    let out = Command::new("xcrun")
+        .args(["devicectl", "device", "process", "launch", "--device", udid, bundle_id])
+        .output()?;
+    if !out.status.success() {
+        let detail = String::from_utf8_lossy(&out.stderr).lines().map(|l| l.trim()).find(|l| !l.is_empty()).unwrap_or("").to_string();
+        anyhow::bail!("Failed to launch \"{bundle_id}\"{}", if detail.is_empty() { ".".into() } else { format!(":\n  {detail}") });
+    }
+    Ok(())
 }
 
 pub fn set_sim_location(udid: &str, lat: &str, lon: &str) -> anyhow::Result<()> {
