@@ -45,6 +45,7 @@ Keys drive the list:
 | `/` | search (jumps live to the first match; `n`/`N` next/prev) |
 | `f` | filter (Network: matches status code, method, url, duration, and GraphQL op) |
 | `y` | copy the selected row (a log — with its full expanded object/array tree — or a request's full detail) |
+| `V` | start a visual selection — `j`/`k` extend it over rows, `y` yanks them all (`V`/`esc` cancels) |
 | `space` / `a` | toggle autoscroll (stick to newest) |
 | `c` | clear |
 | `p` | keep-vs-clear logs on app restart |
@@ -60,7 +61,7 @@ Keys drive the list:
 
 ### Preview mode (`z` — maximized)
 
-**`z`** maximizes the pane to full width (list hidden). Now the keys drive the pane: `j`/`k`/`J`/`K`/PgUp·PgDn/`g`·`G` scroll it, `/` + `n`/`N` search within it, **`c` copies** (a network request → `curl`), `y` copies too. `z` returns to the split.
+**`z`** maximizes the pane to full width (list hidden). Now the keys drive the pane: `j`/`k`/`g`·`G` move a line cursor and `J`/`K`/PgUp·PgDn scroll, `/` + `n`/`N` search within it, **`c` copies** (a network request → `curl`), `y` copies the whole pane. Press **`V`** to start a line selection — `j`/`k` extend it, `y` yanks just those lines. `z` returns to the split.
 
 ### Search, objects, and the Network tab
 

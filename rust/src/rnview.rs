@@ -225,6 +225,10 @@ pub struct RnView {
     method_idx: usize,
     flash: Option<String>,
     focused: bool, // when embedded: dim the footer unless the logs pane is active
+    // Vim-style linewise visual selection. The anchor is a list-row index when
+    // the list is active, or a wrapped-preview-line index when maximized.
+    visual: Option<usize>,
+    detail_cursor: usize, // current line in the maximized preview
 }
 
 impl RnView {
@@ -253,6 +257,16 @@ impl RnView {
             method_idx: 0,
             flash: None,
             focused: true,
+            visual: None,
+            detail_cursor: 0,
+        }
+    }
+
+    fn eff_sel(&self, len: usize) -> usize {
+        if self.follow {
+            len.saturating_sub(1)
+        } else {
+            self.sel[self.tab_idx()].min(len.saturating_sub(1))
         }
     }
 
@@ -452,6 +466,15 @@ fn pad(s: &str, width: usize) -> String {
     }
 }
 
+/// Background for rows/lines inside a visual selection range.
+fn sel_style() -> Style {
+    Style::default().bg(Color::Rgb(38, 79, 120)).fg(Color::White)
+}
+
+fn in_range(range: Option<(usize, usize)>, i: usize) -> bool {
+    range.map_or(false, |(lo, hi)| i >= lo && i <= hi)
+}
+
 /// Build a styled line, highlighting search matches (current row → yellow,
 /// others → cyan).
 fn row_line(text: &str, width: usize, base: Style, search: &str, current: bool) -> Line<'static> {
@@ -608,16 +631,30 @@ fn render_body(view: &RnView, cols: usize, h: usize, d: Option<&Device>) -> Vec<
         return out;
     }
     let eff_sel = if view.follow { len.saturating_sub(1) } else { view.sel[view.tab_idx()].min(len.saturating_sub(1)) };
+    // Visual-select range over list rows (when the list is the active cursor).
+    let list_vis = view.visual.map(|a| (a.min(eff_sel), a.max(eff_sel)));
 
     if view.detail && len > 0 {
         let dl = view.detail_wrapped();
         let d_start = view.detail_scroll.min(dl.len().saturating_sub(h));
         if view.maximized {
+            // Visual-select range over preview lines, cursor = detail_cursor.
+            let cursor = view.detail_cursor.min(dl.len().saturating_sub(1));
+            let prev_vis = view.visual.map(|a| (a.min(cursor), a.max(cursor)));
             return (0..h)
                 .map(|i| {
                     let abs = d_start + i;
                     match dl.get(abs) {
-                        Some(l) => row_line(l, cols, Style::default(), &view.search, Some(abs) == view.detail_hit),
+                        Some(l) => {
+                            let base = if abs == cursor {
+                                Style::default().add_modifier(Modifier::REVERSED)
+                            } else if in_range(prev_vis, abs) {
+                                sel_style()
+                            } else {
+                                Style::default()
+                            };
+                            row_line(l, cols, base, &view.search, Some(abs) == view.detail_hit)
+                        }
                         None => Line::raw(""),
                     }
                 })
@@ -632,7 +669,15 @@ fn render_body(view: &RnView, cols: usize, h: usize, d: Option<&Device>) -> Vec<
                 let idx = list_start + i;
                 let mut spans: Vec<Span> = Vec::new();
                 if let Some((text, err, level)) = rows.get(idx) {
-                    let base = if idx == eff_sel { Style::default().add_modifier(Modifier::REVERSED) } else if *err { Style::default().fg(Color::Red) } else { level_color(level) };
+                    let base = if idx == eff_sel {
+                        Style::default().add_modifier(Modifier::REVERSED)
+                    } else if in_range(list_vis, idx) {
+                        sel_style()
+                    } else if *err {
+                        Style::default().fg(Color::Red)
+                    } else {
+                        level_color(level)
+                    };
                     let line = row_line(text, left_w, base, &view.search, false);
                     spans.extend(line.spans);
                 } else {
@@ -658,6 +703,8 @@ fn render_body(view: &RnView, cols: usize, h: usize, d: Option<&Device>) -> Vec<
                     let current = idx == eff_sel;
                     let base = if current {
                         Style::default().add_modifier(Modifier::REVERSED)
+                    } else if in_range(list_vis, idx) {
+                        sel_style()
                     } else if *err {
                         Style::default().fg(Color::Red)
                     } else {
@@ -679,6 +726,10 @@ fn footer(view: &RnView, is_logs: bool) -> String {
             if let Some(f) = &view.flash {
                 return format!(" {f}");
             }
+            if view.visual.is_some() {
+                let what = if view.maximized { "lines" } else { "rows" };
+                return format!(" VISUAL ({what}) · jk extend · y yank · V/esc cancel");
+            }
             if view.tab == Tab::Perf {
                 return " [ ] tabs · 1-9 dev · live JS FPS + heap · R reload · q quit".into();
             }
@@ -686,12 +737,13 @@ fn footer(view: &RnView, is_logs: bool) -> String {
                 let nn = if view.search.is_empty() { "" } else { " · n/N" };
                 let z = if view.maximized { "z split" } else { "z max" };
                 let copy = if is_logs { "" } else { " · c curl" };
-                return format!(" ⏎ close · {z} · jk list · JK scroll · / search{nn} · y copy{copy} · q quit");
+                let vis = if view.maximized { " · V select" } else { "" };
+                return format!(" ⏎ close · {z} · jk {} · JK scroll · / search{nn}{vis} · y copy{copy} · q quit", if view.maximized { "move" } else { "list" });
             }
             let nn = if view.search.is_empty() { "" } else { " · n/N" };
             let scroll = if view.follow { "on" } else { "off" };
             let netf = if is_logs { "" } else { " · e errors · m method" };
-            format!(" [ ] tabs · 1-9 dev · / search{nn} · f filter · ⏎ preview · z max · y copy{netf} · space/a scroll:{scroll} · c clear · R reload · q quit")
+            format!(" [ ] tabs · 1-9 dev · / search{nn} · f filter · ⏎ preview · z max · V select · y copy{netf} · space/a scroll:{scroll} · c clear · R reload · q quit")
         }
     }
 }
@@ -780,6 +832,48 @@ fn copy_selection(view: &mut RnView) {
     view.flash = Some(if copy_to_clipboard(&text) { format!("copied ({} chars)", text.len()) } else { "copy failed".into() });
 }
 
+/// Copy `text` to the clipboard, flashing how many lines were yanked.
+fn yank(view: &mut RnView, text: String) {
+    if text.is_empty() {
+        return;
+    }
+    let n = text.lines().count();
+    view.flash = Some(if copy_to_clipboard(&text) { format!("yanked {n} line{}", if n == 1 { "" } else { "s" }) } else { "copy failed".into() });
+}
+
+/// Scroll the maximized preview so `detail_cursor` stays on screen.
+fn keep_cursor_visible(view: &mut RnView) {
+    let h = view.view_h.max(1);
+    if view.detail_cursor < view.detail_scroll {
+        view.detail_scroll = view.detail_cursor;
+    } else if view.detail_cursor >= view.detail_scroll + h {
+        view.detail_scroll = view.detail_cursor + 1 - h;
+    }
+}
+
+/// Yank the current visual selection (preview lines when maximized, else list
+/// rows). Returns false if there was no active selection.
+fn yank_visual(view: &mut RnView) -> bool {
+    let anchor = match view.visual {
+        Some(a) => a,
+        None => return false,
+    };
+    let text = if view.maximized {
+        let lines = view.detail_wrapped();
+        let cursor = view.detail_cursor.min(lines.len().saturating_sub(1));
+        let (lo, hi) = (anchor.min(cursor), anchor.max(cursor));
+        lines.get(lo..=hi).map(|s| s.join("\n")).unwrap_or_default()
+    } else {
+        let rows = view.rows();
+        let eff = view.eff_sel(rows.len());
+        let (lo, hi) = (anchor.min(eff), anchor.max(eff));
+        rows.iter().enumerate().filter(|(i, _)| *i >= lo && *i <= hi).map(|(_, (t, _, _))| t.clone()).collect::<Vec<_>>().join("\n")
+    };
+    yank(view, text);
+    view.visual = None;
+    true
+}
+
 fn copy_curl(view: &mut RnView) {
     if view.tab != Tab::Network {
         return;
@@ -848,11 +942,13 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
             view.tab = match view.tab { Tab::Logs => Tab::Perf, Tab::Network => Tab::Logs, Tab::Perf => Tab::Network };
             view.detail = false;
             view.maximized = false;
+            view.visual = None;
         }
         KeyCode::Char(']') => {
             view.tab = match view.tab { Tab::Logs => Tab::Network, Tab::Network => Tab::Perf, Tab::Perf => Tab::Logs };
             view.detail = false;
             view.maximized = false;
+            view.visual = None;
         }
         KeyCode::Char('/') => {
             view.mode = Mode::Search;
@@ -879,9 +975,11 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
             }
         }
         KeyCode::Char('z') => {
+            view.visual = None;
             if !view.detail {
                 view.detail = true;
                 view.detail_scroll = 0;
+                view.detail_cursor = 0;
                 view.maximized = true;
                 view.opened_by_max = true;
             } else if view.maximized {
@@ -892,14 +990,30 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
                 }
             } else {
                 view.maximized = true;
+                view.detail_cursor = view.detail_scroll;
             }
         }
         KeyCode::Char('p') => view.clear_on_restart = !view.clear_on_restart,
-        KeyCode::Char('y') => copy_selection(view),
+        KeyCode::Char('V') => {
+            if view.visual.is_some() {
+                view.visual = None;
+            } else if view.maximized {
+                view.visual = Some(view.detail_cursor);
+            } else {
+                view.follow = false;
+                view.visual = Some(view.eff_sel(n));
+            }
+        }
+        KeyCode::Char('y') => {
+            if !yank_visual(view) {
+                copy_selection(view);
+            }
+        }
         KeyCode::Char('C') => copy_curl(view),
         KeyCode::Char('e') if view.tab == Tab::Network => view.errors_only = !view.errors_only,
         KeyCode::Char('m') if view.tab == Tab::Network => view.method_idx = (view.method_idx + 1) % METHODS.len(),
         KeyCode::Char('a') | KeyCode::Char(' ') => {
+            view.visual = None;
             view.follow = !view.follow;
             if view.follow {
                 view.sel[ti] = n.saturating_sub(1);
@@ -911,6 +1025,7 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
                 view.active = Some(view.targets[idx].key.clone());
                 view.detail = false;
                 view.maximized = false;
+                view.visual = None;
             }
         }
         KeyCode::Char('R') => {
@@ -918,7 +1033,9 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
                 client.send(k, ConnCmd::Reload);
             }
         }
+        KeyCode::Esc if view.visual.is_some() => view.visual = None,
         KeyCode::Enter | KeyCode::Esc => {
+            view.visual = None;
             if view.detail {
                 view.detail = false;
                 view.maximized = false;
@@ -956,7 +1073,9 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
         }
         KeyCode::Up | KeyCode::Char('k') => {
             if view.detail && view.maximized {
-                view.detail_scroll = view.detail_scroll.saturating_sub(1);
+                // Move the preview cursor (drives visual selection); view follows.
+                view.detail_cursor = view.detail_cursor.saturating_sub(1);
+                keep_cursor_visible(view);
                 view.detail_hit = None;
             } else {
                 // Start from the row actually shown (the bottom while following),
@@ -968,7 +1087,9 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
         }
         KeyCode::Down | KeyCode::Char('j') => {
             if view.detail && view.maximized {
-                view.detail_scroll += 1;
+                let last = view.detail_wrapped().len().saturating_sub(1);
+                view.detail_cursor = (view.detail_cursor + 1).min(last);
+                keep_cursor_visible(view);
                 view.detail_hit = None;
             } else {
                 let cur = if view.follow { n.saturating_sub(1) } else { view.sel[ti] };
@@ -989,12 +1110,24 @@ fn handle_key(view: &mut RnView, key: KeyEvent, client: &RnClient) -> bool {
             view.sel[ti] = next;
         }
         KeyCode::Char('g') => {
-            view.follow = false;
-            view.sel[ti] = 0;
+            if view.detail && view.maximized {
+                view.detail_cursor = 0;
+                keep_cursor_visible(view);
+            } else {
+                view.visual = None;
+                view.follow = false;
+                view.sel[ti] = 0;
+            }
         }
         KeyCode::Char('G') => {
-            view.follow = true;
-            view.sel[ti] = n.saturating_sub(1);
+            if view.detail && view.maximized {
+                view.detail_cursor = view.detail_wrapped().len().saturating_sub(1);
+                keep_cursor_visible(view);
+            } else {
+                view.visual = None;
+                view.follow = true;
+                view.sel[ti] = n.saturating_sub(1);
+            }
         }
         _ => {}
     }
