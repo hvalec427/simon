@@ -6,7 +6,7 @@ import path from 'path';
 const REPO = 'hvalec427/simon';
 const DEFAULT_INSTALL_PATH = '/usr/local/bin/simon';
 
-export type Channel = 'stable' | 'nightly';
+export type Channel = 'stable' | 'nightly' | 'dev';
 
 const GH_HEADERS = { Accept: 'application/vnd.github+json', 'User-Agent': 'simon-cli' };
 
@@ -43,8 +43,18 @@ interface Release {
   prerelease: boolean;
 }
 
-// Stable = GitHub's "latest" (excludes prereleases). Nightly = newest prerelease.
+// Stable = GitHub's "latest" (excludes prereleases). Nightly = newest dated
+// prerelease. Dev = the single rolling "dev" prerelease (version in its title).
 export async function latestForChannel(channel: Channel): Promise<{ version: string; tag: string }> {
+  if (channel === 'dev') {
+    const res = await fetch(`https://api.github.com/repos/${REPO}/releases/tags/dev`, { headers: GH_HEADERS });
+    if (!res.ok) throw new Error('No dev build has been published yet.');
+    const data = (await res.json()) as { name?: string; tag_name?: string };
+    const version = (data.name || data.tag_name || '').replace(/^v/, '');
+    if (!version) throw new Error('Could not read the dev build version.');
+    return { version, tag: 'dev' };
+  }
+
   if (channel === 'stable') {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: GH_HEADERS });
     if (!res.ok) throw new Error(`GitHub API returned ${res.status} ${res.statusText}`);
@@ -89,6 +99,7 @@ export async function fetchReleaseNotes(tag: string): Promise<string | undefined
 // the current version is unknown, just the latest release's notes. Capped so a
 // long gap doesn't flood the terminal.
 export async function changelogSince(channel: Channel, current: string): Promise<string | undefined> {
+  if (channel === 'dev') return undefined; // dev is a rolling build with no per-version notes
   let releases: { tag_name: string; prerelease: boolean; body?: string }[];
   try {
     const res = await fetch(`https://api.github.com/repos/${REPO}/releases?per_page=100`, { headers: GH_HEADERS });
@@ -117,7 +128,7 @@ export async function changelogSince(channel: Channel, current: string): Promise
 // A stable X.Y.Z outranks any X.Y.Z-nightly.N.
 export function compareVersions(a: string, b: string): number {
   const parts = (v: string): number[] => {
-    const m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-nightly\.(\d+))?$/);
+    const m = v.match(/^(\d+)\.(\d+)\.(\d+)(?:-[a-z]+\.(\d+))?$/);
     if (!m) return [0, 0, 0, 0];
     return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Number.MAX_SAFE_INTEGER : Number(m[4])];
   };

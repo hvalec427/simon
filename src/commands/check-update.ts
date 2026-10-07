@@ -13,6 +13,7 @@ import {
 interface CheckUpdateOptions {
   nightly?: boolean;
   stable?: boolean;
+  dev?: boolean;
 }
 
 export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<void> {
@@ -20,7 +21,13 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
     console.error(chalk.yellow('simon self-update is macOS-only (arm64/x64). Build from source on other platforms.'));
     process.exit(1);
   }
-  const channel: Channel = options.nightly ? 'nightly' : options.stable ? 'stable' : loadChannel();
+  const channel: Channel = options.dev
+    ? 'dev'
+    : options.nightly
+    ? 'nightly'
+    : options.stable
+    ? 'stable'
+    : loadChannel();
   const current = currentVersion();
 
   const stop = spinner(`Checking for ${channel} updates...`);
@@ -46,7 +53,7 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
   if (cmp < 0) {
     console.log(chalk.yellow(`\nThe latest ${channel} build (${latest.version}) is older than your installed version.`));
     if (options.nightly || options.stable) {
-      const flag = options.nightly ? ' --nightly' : ' --stable';
+      const flag = options.dev ? ' --dev' : options.nightly ? ' --nightly' : ' --stable';
       console.log(chalk.gray(`Run \`simon update${flag}\` to switch to the ${channel} channel (installs ${latest.version}).`));
     }
     return;
@@ -57,6 +64,6 @@ export async function checkUpdateCommand(options: CheckUpdateOptions): Promise<v
     console.log(chalk.bold(`\nWhat's new (${current} → ${latest.version}):`));
     console.log(chalk.gray(notes));
   }
-  const flag = options.nightly ? ' --nightly' : options.stable ? ' --stable' : '';
+  const flag = options.dev ? ' --dev' : options.nightly ? ' --nightly' : options.stable ? ' --stable' : '';
   console.log(chalk.gray(`\nRun \`simon update${flag}\` to install.`));
 }

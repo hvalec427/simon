@@ -46,6 +46,11 @@ describe('compareVersions', () => {
     expect(compareVersions('2.15.0-nightly.20261006120500', '2.15.0-nightly.20261006115900')).toBe(1);
     expect(compareVersions('2.15.0-nightly.20261006120500', '2.14.0')).toBe(1); // nightly ahead of stable base
   });
+
+  it('orders dev prereleases by their build timestamp', () => {
+    expect(compareVersions('2.17.0-dev.20261007120500', '2.17.0-dev.20261007115900')).toBe(1);
+    expect(compareVersions('2.17.0-dev.20261007120500', '2.17.0')).toBe(-1); // dev is a prerelease of 2.17.0
+  });
 });
 
 describe('latestForChannel', () => {
@@ -74,6 +79,16 @@ describe('latestForChannel', () => {
   it('throws when no nightly exists', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => [{ tag_name: 'v2.2.0', prerelease: false }] })));
     await expect(latestForChannel('nightly')).rejects.toThrow();
+  });
+
+  it('dev reads the version from the rolling release title', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({ name: '2.17.0-dev.20261007120500', tag_name: 'dev' }) })));
+    expect(await latestForChannel('dev')).toEqual({ version: '2.17.0-dev.20261007120500', tag: 'dev' });
+  });
+
+  it('dev throws when no rolling build exists', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 404 })));
+    await expect(latestForChannel('dev')).rejects.toThrow();
   });
 });
 

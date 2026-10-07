@@ -129,6 +129,7 @@ program
   .description('Check whether a newer version of simon is available')
   .option('--nightly', 'Check the nightly (develop) channel')
   .option('--stable', 'Check the stable (master) channel')
+  .option('--dev', 'Check the dev channel (rolling build from every develop commit)')
   .action(checkUpdateCommand);
 
 program
@@ -136,6 +137,7 @@ program
   .description('Update simon to the latest version (remembers --stable/--nightly channel)')
   .option('--nightly', 'Switch to and update from the nightly (develop) channel')
   .option('--stable', 'Switch to and update from the stable (master) channel')
+  .option('--dev', 'Switch to and update from the dev channel (rolling build from every develop commit)')
   .option('--force', 'Install the channel\'s latest even if it is the same or an older version')
   .action(updateCommand);
 

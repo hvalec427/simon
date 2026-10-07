@@ -18,11 +18,16 @@ import {
 interface UpdateOptions {
   nightly?: boolean;
   stable?: boolean;
+  dev?: boolean;
   force?: boolean;
 }
 
 // A channel flag both selects and remembers the channel; otherwise use the saved one.
 function resolveChannel(options: UpdateOptions): Channel {
+  if (options.dev) {
+    saveChannel('dev');
+    return 'dev';
+  }
   if (options.nightly) {
     saveChannel('nightly');
     return 'nightly';
