@@ -4,7 +4,7 @@
 //! Metro PTY gets raw-key passthrough so `r`/`d`/`j` and friends work exactly as
 //! in a normal terminal; the same actions are also reachable as global shortcuts.
 
-use crate::devices::{get_all_installed, InstalledDevice};
+use crate::devices::{get_all_installed, get_all_running, InstalledDevice, RunningDevice};
 use crate::proc::PtyProcess;
 use crate::rnclient::{ConnCmd, RnClient};
 use crate::rnconfig::ProjectConfig;
@@ -26,8 +26,25 @@ enum Pane {
 }
 
 enum DashMsg {
-    Devices(Vec<InstalledDevice>),
+    Devices(Vec<DeviceRow>),
     Flash(String),
+}
+
+/// How to boot a device from the pane — physical devices are already connected,
+/// so they have no boot target.
+#[derive(Clone)]
+enum BootTarget {
+    IosSim(String),
+    Avd(String),
+}
+
+/// A row in the Devices pane: a simulator/emulator (bootable) or a connected
+/// physical device (just listed).
+#[derive(Clone)]
+struct DeviceRow {
+    label: String,
+    running: bool,
+    boot: Option<BootTarget>,
 }
 
 pub struct DashApp {
@@ -39,7 +56,7 @@ pub struct DashApp {
     rnview: RnView,
     focus: Pane,
     input_mode: bool,
-    devices: Vec<InstalledDevice>,
+    devices: Vec<DeviceRow>,
     dev_sel: usize,
     rx: Receiver<DashMsg>,
     tx: Sender<DashMsg>,
@@ -63,8 +80,24 @@ impl DashApp {
         // Background device poller — simctl/adb are slow, so keep them off the UI thread.
         let dev_tx = tx.clone();
         std::thread::spawn(move || loop {
-            let list = get_all_installed(None);
-            if dev_tx.send(DashMsg::Devices(list)).is_err() {
+            // Installed sims/emulators (bootable) …
+            let mut rows: Vec<DeviceRow> = get_all_installed(None)
+                .into_iter()
+                .map(|d| {
+                    let boot = match &d {
+                        InstalledDevice::IosSim { udid, .. } => BootTarget::IosSim(udid.clone()),
+                        InstalledDevice::AndroidAvd { name, .. } => BootTarget::Avd(name.clone()),
+                    };
+                    DeviceRow { label: d.label(), running: d.running(), boot: Some(boot) }
+                })
+                .collect();
+            // … plus any connected physical devices (already running, not bootable).
+            for d in get_all_running(None) {
+                if matches!(d, RunningDevice::IosPhysical { .. } | RunningDevice::AndroidPhysical { .. }) {
+                    rows.push(DeviceRow { label: d.label(), running: true, boot: None });
+                }
+            }
+            if dev_tx.send(DashMsg::Devices(rows)).is_err() {
                 break;
             }
             std::thread::sleep(Duration::from_millis(2500));
@@ -160,21 +193,28 @@ impl DashApp {
             Some(d) => d.clone(),
             None => return,
         };
-        if dev.running() {
-            self.set_flash(format!("{} is already running", dev.name()));
+        if dev.running {
+            self.set_flash(format!("{} is already running", dev.label));
             return;
         }
+        let target = match dev.boot {
+            Some(t) => t,
+            None => {
+                self.set_flash("that's a physical device — it's already connected");
+                return;
+            }
+        };
         let tx = self.tx.clone();
-        let name = dev.name().to_string();
-        self.set_flash(format!("launching {name}…"));
+        let label = dev.label.clone();
+        self.set_flash(format!("launching {label}…"));
         std::thread::spawn(move || {
-            let res = match &dev {
-                InstalledDevice::IosSim { udid, .. } => ios::boot_simulator(udid),
-                InstalledDevice::AndroidAvd { name, .. } => android::launch_avd(name),
+            let res = match target {
+                BootTarget::IosSim(udid) => ios::boot_simulator(&udid),
+                BootTarget::Avd(name) => android::launch_avd(&name),
             };
             let msg = match res {
-                Ok(()) => format!("launched {name}"),
-                Err(e) => format!("failed to launch {name}: {e}"),
+                Ok(()) => format!("launched {label}"),
+                Err(e) => format!("failed to launch {label}: {e}"),
             };
             let _ = tx.send(DashMsg::Flash(msg));
         });
@@ -453,7 +493,7 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
         lines.push(Line::styled("  (no simulators/emulators found)", Style::default().fg(Color::DarkGray)));
     }
     for (i, d) in app.devices.iter().enumerate() {
-        let marker = if d.running() {
+        let marker = if d.running {
             Span::styled("● ", Style::default().fg(Color::Green))
         } else {
             Span::styled("○ ", Style::default().fg(Color::DarkGray))
@@ -463,7 +503,7 @@ fn render_devices(app: &mut DashApp, frame: &mut Frame, area: Rect) {
         } else {
             Style::default()
         };
-        lines.push(Line::from(vec![Span::raw(" "), marker, Span::styled(d.label(), name_style)]));
+        lines.push(Line::from(vec![Span::raw(" "), marker, Span::styled(d.label.clone(), name_style)]));
     }
     frame.render_widget(Paragraph::new(Text::from(lines)), inner);
 }
