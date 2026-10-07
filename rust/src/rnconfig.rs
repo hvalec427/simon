@@ -119,10 +119,6 @@ pub struct ProjectConfig {
     pub ios: Option<PlatformConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub android: Option<PlatformConfig>,
-    /// A universal/deep link that opens the app, fired at a device with `o` in
-    /// the dashboard (e.g. "https://myapp.com/home" or "myapp://home").
-    #[serde(rename = "openLink", default, skip_serializing_if = "Option::is_none")]
-    pub open_link: Option<String>,
     /// Deep links to pick from with `l` in the Devices pane.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub deeplinks: Vec<DeepLink>,
@@ -134,11 +130,7 @@ pub struct ProjectConfig {
 impl ProjectConfig {
     /// A minimal entry pointing at a root, everything else derived from defaults.
     pub fn new(name: String, root: String) -> Self {
-        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, open_link: None, deeplinks: Vec::new(), env: BTreeMap::new() }
-    }
-
-    pub fn open_link(&self) -> Option<&str> {
-        self.open_link.as_deref()
+        ProjectConfig { name, root, package_manager: None, metro: None, ios: None, android: None, deeplinks: Vec::new(), env: BTreeMap::new() }
     }
 
     pub fn ios_bundle_id(&self) -> Option<&str> {

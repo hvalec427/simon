@@ -377,9 +377,7 @@ impl DashApp {
         self.set_flash(msg);
     }
 
-    /// `o`: open/launch the app on the selected (running) device. Prefers the
-    /// bundleId (launch the app directly — most reliable); falls back to a
-    /// configured `openLink` only when there's no bundleId for the platform.
+    /// `o`: launch the app on the selected (running) device, by its bundleId.
     fn open_selected(&mut self) {
         let dev = match self.devices.get(self.dev_sel) {
             Some(d) => d.clone(),
@@ -397,13 +395,12 @@ impl DashApp {
         } else {
             self.project.ios_bundle_id().is_some()
         };
-        // bundleId set → launch the app (url None); otherwise fall back to openLink.
-        let url = if has_bundle { None } else { self.project.open_link().map(String::from) };
-        if url.is_none() && !has_bundle {
-            self.set_flash("set a platform \"bundleId\" (or \"openLink\") in rn.json");
+        if !has_bundle {
+            let which = if dev.platform == Platform::Android { "android" } else { "ios" };
+            self.set_flash(format!("set {which}.bundleId in rn.json to launch the app"));
             return;
         }
-        self.run_on_device(target, url, dev.label);
+        self.run_on_device(target, None, dev.label);
     }
 
     /// `l` picker: open the chosen deep link on the selected (running) device.
