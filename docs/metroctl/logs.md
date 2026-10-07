@@ -1,28 +1,12 @@
-# Logs
+# React Native logs (`metroctl logs`)
 
-Stream logs from a running simulator, emulator, or physical device:
-
-```sh
-simon logs                 # pick a running device
-simon logs "iPhone 16"     # target one directly
-```
-
-## Native device logs
-
-- `-f, --filter <expr>` — filter logs (NSPredicate on iOS, regex on Android).
-- `--app <name>` — show only one app's logs (process/app name; a bundle id also matches on iOS simulators).
-
-Physical iOS streams the device syslog via [go-ios](https://github.com/danielpaulus/go-ios) (auto-installed, and simon starts the iOS 17+ developer tunnel for you — see [physical devices](physical-devices.md)). This is the **native** log — for React Native JS logs use [`metroctl logs`](rn.md).
-
-## React Native logs (`metroctl logs`)
-
-> React Native JS logs live in the separate **metroctl** tool (see [the RN dashboard](rn.md)), not `simon logs`. The interactive viewer below is the same one metroctl embeds.
+React Native **JS console + network** from Metro's inspector (CDP) — the same feed React Native DevTools uses — for any device/simulator connected to Metro (no go-ios/adb needed). This is the standalone viewer; the [dashboard](README.md) embeds the same thing.
 
 ```sh
 metroctl logs [--port 8081]
 ```
 
-React Native **JS console + network** from Metro's inspector (CDP) — the same feed React Native DevTools uses — for any device/simulator connected to Metro (no go-ios/adb needed). Dev-only (Metro must be running); network depth depends on your RN version's CDP support. Piped or redirected, it falls back to a plain line stream.
+Dev-only (Metro must be running); network depth depends on your RN version's CDP support. Piped or redirected, it falls back to a plain line stream.
 
 In a terminal it opens an **interactive viewer** (dark theme) with **Logs**, **Network**, and **Perf** tabs. The Logs/Network tabs have two modes (list and preview).
 
@@ -30,7 +14,7 @@ In a terminal it opens an **interactive viewer** (dark theme) with **Logs**, **N
 
 A live dashboard for the active device, sampled once a second:
 
-- **JS-thread FPS** — how many frames per second the JS thread services (≤60), shown as a number, a bar, and a rolling sparkline of the last 60s. simon measures this by injecting a `requestAnimationFrame` counter into the app over CDP.
+- **JS-thread FPS** — how many frames per second the JS thread services (≤60), shown as a number, a bar, and a rolling sparkline of the last 60s. metroctl measures this by injecting a `requestAnimationFrame` counter into the app over CDP.
 - **JS heap** — used / total, via `Runtime.getHeapUsage` (shown only if the runtime reports it).
 
 > Native/UI FPS is **not** exposed over CDP, so only the JS-thread figure is available here — the same "JS" number RN's in-app perf monitor shows. Switch devices with `1`-`9`.
@@ -80,7 +64,7 @@ It **auto-reconnects** on close/crash and honours the clear-on-restart toggle on
 
 ### Attaching an external debugger (`--print-ws`)
 
-simon doesn't do breakpoint debugging, but it can hand you the Metro inspector WebSocket URL so another tool (e.g. `nvim-dap` via `vscode-js-debug`'s *attach*) can connect:
+metroctl doesn't do breakpoint debugging, but it can hand you the Metro inspector WebSocket URL so another tool (e.g. `nvim-dap` via `vscode-js-debug`'s *attach*) can connect:
 
 ```sh
 metroctl logs --print-ws                 # print URL(s) for every target
@@ -88,4 +72,4 @@ metroctl logs --print-ws "iPhone 16"     # just the matching target
 WS=$(metroctl logs --print-ws)           # capture it for a debugger config
 ```
 
-URLs go to stdout (so it's pipeable); when several targets match, each is labelled on stderr. The breakpoints/stepping themselves live in your editor's DAP setup — simon only points it at the right endpoint.
+URLs go to stdout (so it's pipeable); when several targets match, each is labelled on stderr. The breakpoints/stepping themselves live in your editor's DAP setup — metroctl only points it at the right endpoint.

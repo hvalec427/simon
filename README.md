@@ -5,7 +5,7 @@ This repo is a **monorepo** (a Cargo workspace under [`rust/`](rust)) of small, 
 | Tool | What it is | Status |
 |---|---|---|
 | **simon** | CLI for managing iOS simulators, Android emulators, and physical devices (boot, stop, wipe, logs, deep links, push). | Installed via the script below; self-updates. |
-| **metroctl** | A single-window React Native dashboard (Metro + build/run + JS logs/network/perf), built on simon. See [docs/rn.md](docs/rn.md). | Build from source for now — see [metroctl](#metroctl). |
+| **metroctl** | A single-window React Native dashboard (Metro + build/run + JS logs/network/perf), built on simon. See [the metroctl guide](docs/metroctl/README.md). | Build from source for now — see [metroctl](#metroctl). |
 
 simon is the core and can be used entirely on its own; metroctl depends on it.
 
@@ -25,7 +25,7 @@ Built entirely with AI (Claude).
 curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 ```
 
-Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
+Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/simon/updating.md) for channels (stable/nightly/dev).
 
 ## Uninstall
 
@@ -71,12 +71,12 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 
 ## Guides
 
-- [Logs](docs/logs.md) — native device logs
-- [RN dashboard](docs/rn.md) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
-- [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
-- [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
-- [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
-- [Updating](docs/updating.md) — release channels, self-update
+- [Logs](docs/simon/logs.md) — native device logs
+- [RN dashboard](docs/metroctl/README.md) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
+- [Push notifications](docs/simon/push.md) — simulators and real devices (FCM / APNs)
+- [Location](docs/simon/location.md) — simulated GPS on simulators, emulators, and real devices
+- [Physical devices](docs/simon/physical-devices.md) — USB detection, the iOS tunnel, deep links
+- [Updating](docs/simon/updating.md) — release channels, self-update
 
 ## Requirements
 
@@ -91,7 +91,7 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 A companion tool that runs a whole React Native project from one terminal window —
 start/drive Metro, boot simulators/emulators, build & run the app, open deep links,
 and watch JS logs/network/perf — all built on top of simon. Full guide:
-[docs/rn.md](docs/rn.md).
+[docs/metroctl](docs/metroctl/README.md).
 
 It isn't in the installer yet; build it from the workspace:
 

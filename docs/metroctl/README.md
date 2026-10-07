@@ -11,7 +11,7 @@ metroctl          # open the dashboard for the current project
 metroctl config   # print the config file path
 ```
 
-> **Getting metroctl.** It's part of the [simon workspace](../README.md) and not in
+> **Getting metroctl.** It's part of the [simon workspace](../../README.md) and not in
 > the installer yet — build it from source: `cd rust && cargo install --path metroctl`
 > (or run it ad-hoc with `cargo run -p metroctl -- <args>`).
 
