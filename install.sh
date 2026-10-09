@@ -11,8 +11,11 @@ else
   FILE="simon-darwin-x64"
 fi
 
-# `nightly` → newest prerelease; a version string → that exact tag; else latest stable.
-if [ "$1" = "nightly" ]; then
+# `dev` → rolling dev build; `nightly` → newest nightly; a version string → that
+# exact tag; else latest stable.
+if [ "$1" = "dev" ]; then
+  VERSION="dev"
+elif [ "$1" = "nightly" ]; then
   # GitHub's /releases list isn't newest-first — version-sort and take the highest.
   VERSION=$(curl -fsSL "https://api.github.com/repos/$REPO/releases?per_page=30" \
     | grep '"tag_name"' | grep nightly | cut -d'"' -f4 | sort -V | tail -1)
@@ -27,6 +30,14 @@ if [ -z "$VERSION" ]; then
   echo "Error: could not resolve a release from $REPO"
   exit 1
 fi
+
+# The channel `simon update` follows from now on, recorded below.
+case "$VERSION" in
+  dev) CHANNEL="dev" ;;
+  *-dev.*) CHANNEL="dev" ;;
+  *-nightly.*) CHANNEL="nightly" ;;
+  *) CHANNEL="stable" ;;
+esac
 
 # Install over the simon already on PATH if there is one, so we never leave a
 # stale copy shadowing the new version; otherwise default to /usr/local/bin.
@@ -54,7 +65,12 @@ else
   sudo mv /tmp/simon "$INSTALL_PATH"
 fi
 
-echo "Done — simon $VERSION installed to $INSTALL_PATH"
+# Remember the channel so a plain `simon update` stays on it.
+CONFIG_DIR="$HOME/.config/simon"
+mkdir -p "$CONFIG_DIR"
+printf '{\n  "channel": "%s"\n}\n' "$CHANNEL" > "$CONFIG_DIR/update.json"
+
+echo "Done — simon $VERSION ($CHANNEL channel) installed to $INSTALL_PATH"
 
 # Warn if some other simon earlier in PATH would still win.
 RESOLVED=$(command -v simon 2>/dev/null || true)

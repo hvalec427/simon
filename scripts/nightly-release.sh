@@ -19,25 +19,29 @@ BASE="${MAJOR}.$((MINOR + 1)).0"
 # Previous nightly = the one with the highest date suffix. Don't use
 # --sort=creatordate: lightweight tags tie on date and fall back to ascending
 # refname, picking the oldest nightly.
-PREV=$(git tag -l 'v*-nightly.*' | sort -t. -k4,4 -n | tail -1)
+TS=$(date -u +%Y%m%d)
+TAG="v${BASE}-nightly.${TS}"
+# Sort on the 8-digit date prefix first: older nightlies used 14-digit
+# timestamps, which would otherwise always sort above plain dates.
+PREV=$(git tag -l 'v*-nightly.*' | grep -vx -e "${TAG}" | sort -t. -k4.1,4.8n -k4,4n | tail -1)
 [ -z "${PREV}" ] && PREV="v${LATEST}"
 RANGE="${PREV}..HEAD"
 
 # Skip the build entirely when nothing that affects the binary changed since the
 # last nightly (docs/markdown-only commits don't warrant a new build).
-if git rev-parse "${PREV}" >/dev/null 2>&1; then
-  CODE_CHANGES=$(git diff --name-only "${PREV}" HEAD -- . ':(exclude)docs/**' ':(exclude)*.md' ':(exclude)LICENSE')
+SINCE="${PREV}"
+git rev-parse -q --verify "refs/tags/${TAG}" >/dev/null && SINCE="${TAG}"
+if git rev-parse "${SINCE}" >/dev/null 2>&1; then
+  CODE_CHANGES=$(git diff --name-only "${SINCE}" HEAD -- . ':(exclude)docs/**' ':(exclude)*.md' ':(exclude)LICENSE')
   if [ -z "${CODE_CHANGES}" ]; then
-    echo "No code changes since ${PREV} — skipping nightly."
+    echo "No code changes since ${SINCE} — skipping nightly."
     exit 0
   fi
 fi
 
-# Tag with the UTC date: the job runs at 23:00 UTC (end of the UTC day), so the
-# UTC date is the day's build. (Local time would tip into the next day in summer.)
-TS=$(date -u +%Y%m%d)
+# Tag with the UTC date: the job runs at 21:00 UTC, so the UTC date is the
+# day's build. (Local time would tip into the next day in summer.)
 VERSION="${BASE}-nightly.${TS}"
-TAG="v${VERSION}"
 
 echo "Building nightly ${TAG} (latest stable: ${LATEST}, since ${PREV})"
 
@@ -95,6 +99,11 @@ NOTES=$(mktemp)
   echo
   echo "_Apple Silicon shown; on Intel use \`simon-darwin-x64\`. Already installed? \`simon update --nightly\`._"
 } > "${NOTES}"
+
+# A nightly already cut today is replaced, so the day's last build wins.
+if gh release view "${TAG}" --repo "$REPO" >/dev/null 2>&1; then
+  gh release delete "${TAG}" --repo "$REPO" --cleanup-tag --yes
+fi
 
 # --target the built develop commit: without it, gh tags the repo's default
 # branch (master) HEAD, so PREV..HEAD would span the whole develop/master
