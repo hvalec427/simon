@@ -1,5 +1,5 @@
 use crate::android::{find_bin, sdk_root};
-use crate::update::{current_version, latest_for_channel, load_channel};
+use crate::update::{current_version, latest_for_channel, current_channel};
 use std::process::Command;
 
 enum Status {
@@ -81,7 +81,7 @@ fn emulator_check() -> Check {
 
 fn version_check() -> Check {
     let current = current_version();
-    let channel = load_channel();
+    let channel = current_channel();
     match latest_for_channel(channel) {
         Ok(latest) if latest.version != current => Check {
             status: Status::Warn,

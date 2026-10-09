@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - master   # stable (on merge from develop)
-      - main     # stable
       - develop  # dev: rolling build on every commit
   schedule:
     # Nightly from develop, 23:00 Ljubljana in summer (CEST), 22:00 in winter —
@@ -68,13 +67,13 @@ jobs:
       # Node is only needed for semantic-release (stable channel); dev and
       # nightly builds don't touch it, so only set it up on stable pushes.
       - name: Set up Node (stable release only)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Install semantic-release deps (stable release only)
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           npm install -g npm@11
           npm ci
@@ -100,7 +99,7 @@ jobs:
       # Rule: a stable release must only contain commits already shipped to a
       # nightly — i.e. every new non-merge commit must be on develop.
       - name: Enforce stable comes from develop
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: |
           git fetch origin develop
           PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-nightly' | head -1)
@@ -115,13 +114,13 @@ jobs:
           fi
           echo "OK — all released commits are on develop."
 
-      # master/main → stable release via semantic-release.
+      # master → stable release via semantic-release.
       - name: Fetch git notes
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         run: git fetch origin "+refs/notes/*:refs/notes/*" || true
 
       - name: Stable release
-        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release

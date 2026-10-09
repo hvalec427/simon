@@ -17,7 +17,7 @@ simon self-updates in place (over the binary you're running). It only uses `sudo
 - **nightly** — a dated prerelease built from `develop` once a day (with a changelog), skipped on days with no code changes.
 - **dev** — the bleeding edge: rebuilt on **every** `develop` commit and published to a single **rolling** prerelease tagged `dev` (binaries overwritten in place — one release entry, never one per commit, and no changelog). The version carries a build timestamp so updates are detectable.
 
-The channel is remembered per machine, so plain `simon update` stays on whichever you picked:
+Plain `simon update` stays on the channel of the build you have installed (read from its version: `-dev.…`, `-nightly.…`, or a plain release for stable). Pass a flag to switch rings:
 
 ```sh
 simon update --stable         # stable line

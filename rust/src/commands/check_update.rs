@@ -13,7 +13,7 @@ pub fn run(stable: bool, nightly: bool, dev: bool) {
     } else if stable {
         Channel::Stable
     } else {
-        load_channel()
+        current_channel()
     };
     let current = current_version();
 

@@ -149,7 +149,7 @@ enum Command {
         #[arg(long)]
         dev: bool,
     },
-    /// Update simon to the latest version (remembers the channel)
+    /// Update simon to the latest version (stays on the installed build's channel)
     Update {
         #[arg(long)]
         stable: bool,
