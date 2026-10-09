@@ -7,14 +7,12 @@ set -euo pipefail
 
 REPO="hvalec427/simon"
 
-# Base = next minor above the latest stable, so nightlies sort ahead of stable.
+# Base = the version the next stable release will get; LATEST is for notes.
 # Authenticated: Actions runners share IPs and hit the anonymous rate limit (403).
 LATEST=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
   "https://api.github.com/repos/$REPO/releases/latest" \
   | grep '"tag_name"' | head -1 | cut -d'"' -f4 | sed 's/^v//')
-MAJOR=$(echo "$LATEST" | cut -d. -f1)
-MINOR=$(echo "$LATEST" | cut -d. -f2)
-BASE="${MAJOR}.$((MINOR + 1)).0"
+BASE=$(bash scripts/next-version.sh)
 
 # Previous nightly = the one with the highest date suffix. Don't use
 # --sort=creatordate: lightweight tags tie on date and fall back to ascending
