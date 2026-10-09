@@ -6,20 +6,16 @@ pub fn run(stable: bool, nightly: bool, dev: bool, force: bool) {
         eprintln!("simon self-update is macOS-only (arm64/x64). Build from source on other platforms.");
         std::process::exit(1);
     }
-    let previous = load_channel();
     let channel = if dev {
-        save_channel(Channel::Dev);
         Channel::Dev
     } else if nightly {
-        save_channel(Channel::Nightly);
         Channel::Nightly
     } else if stable {
-        save_channel(Channel::Stable);
         Channel::Stable
     } else {
-        load_channel()
+        current_channel()
     };
-    let switched = channel != previous;
+    let switched = channel != current_channel();
     let current = current_version();
 
     let latest = match latest_for_channel(channel) {
