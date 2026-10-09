@@ -3,14 +3,15 @@ name: Build & Release
 on:
   push:
     branches:
-      - master   # stable releases (on merge from develop)
+      - master   # stable (on merge from develop)
+      - main     # stable
+      - develop  # dev: rolling build on every commit
   schedule:
-    # Nightly from develop, once a day. Cron is UTC; 23:00 UTC ≈ midnight in
-    # Slovenia (00:00 CET in winter, 01:00 CEST in summer — GitHub cron can't
-    # follow DST). The build is skipped if there are no code changes since the
-    # last nightly, and it's tagged with the Ljubljana calendar date.
-    - cron: "0 23 * * *"
-  workflow_dispatch: {} # manual nightly on demand
+    # Nightly from develop, 23:00 Ljubljana in summer (CEST), 22:00 in winter —
+    # GitHub cron is UTC-only. Tagged with the UTC date; skipped if there are no
+    # code changes since the last nightly. GitHub may fire the cron late.
+    - cron: "0 21 * * *"
+  workflow_dispatch: {} # nightly (also on demand)
 
 permissions:
   contents: write
@@ -23,11 +24,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Scheduled runs always use the workflow file on the default branch (master),
+  # which lags develop and once broke nightlies. This job only re-dispatches the
+  # workflow on develop, so the nightly build runs develop's own definition.
+  trigger-nightly:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch nightly on develop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --repo "$GITHUB_REPOSITORY" --ref develop
+
   release:
-    # Must be macOS: pkg can't generate V8 bytecode for a macOS-arm64 target when
-    # cross-building on Linux, and arm64 binaries need an (ad-hoc) code signature
-    # that pkg applies natively on macOS. Linux builds produce binaries that are
-    # killed on Apple Silicon. Capacity-related queue failures can just be re-run.
+    if: github.event_name != 'schedule'
+    # Must be macOS: the binaries are built with cargo for both Apple targets and
+    # ad-hoc code-signed with `codesign` (macOS-only), and iOS tooling is macOS
+    # only. Capacity-related queue failures can just be re-run.
     runs-on: macos-latest
 
     steps:
@@ -35,29 +50,44 @@ jobs:
         with:
           fetch-depth: 0
 
-      # Scheduled/manual runs check out the default branch (master); nightlies
-      # must build from develop.
+      # Manual runs may be started on any branch; nightlies always build develop.
       - name: Build from develop (nightly)
         if: github.event_name != 'push'
         run: |
           git fetch origin develop --tags
           git checkout -B develop origin/develop
 
-      - uses: actions/setup-node@v4
+      # Cache the cargo registry and build artifacts. Runners start cold, so
+      # without this every push recompiles the whole dependency tree (rustls,
+      # reqwest, ratatui, tungstenite, portable-pty, …) from scratch.
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
+
+      # Node is only needed for semantic-release (stable channel); dev and
+      # nightly builds don't touch it, so only set it up on stable pushes.
+      - name: Set up Node (stable release only)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      # npm 10 mis-hoists conflicting transitive majors (commitlint vs
-      # semantic-release both pull conventional-commits-filter), producing a
-      # lockfile it then rejects. npm 11 nests them correctly.
-      - name: Pin npm 11
-        run: npm install -g npm@11
+      - name: Install semantic-release deps (stable release only)
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+        run: |
+          npm install -g npm@11
+          npm ci
 
-      - name: Install dependencies
-        run: npm ci
+      # build-binaries.sh adds the Apple targets and compiles --release for both,
+      # which is also the compile gate — so there's no separate build check.
 
-      - name: Test
-        run: npm test
+      # develop push → rolling "dev" build (single prerelease, no changelog).
+      - name: Dev build
+        if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/dev-release.sh
 
       # Scheduled/manual → date-stamped nightly prerelease from develop (custom;
       # no semantic-release notes). Skips itself if there are no code changes.
@@ -70,7 +100,7 @@ jobs:
       # Rule: a stable release must only contain commits already shipped to a
       # nightly — i.e. every new non-merge commit must be on develop.
       - name: Enforce stable comes from develop
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: |
           git fetch origin develop
           PREV=$(git tag --list 'v[0-9]*' --sort=-v:refname | grep -v -- '-nightly' | head -1)
@@ -85,13 +115,13 @@ jobs:
           fi
           echo "OK — all released commits are on develop."
 
-      # master → stable release via semantic-release.
+      # master/main → stable release via semantic-release.
       - name: Fetch git notes
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         run: git fetch origin "+refs/notes/*:refs/notes/*" || true
 
       - name: Stable release
-        if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx semantic-release

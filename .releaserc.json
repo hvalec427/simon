@@ -1,5 +1,5 @@
 {
-  "branches": ["master"],
+  "branches": ["master", "main"],
   "plugins": [
     "@semantic-release/commit-analyzer",
     "@semantic-release/release-notes-generator",
@@ -7,7 +7,7 @@
     [
       "@semantic-release/exec",
       {
-        "prepareCmd": "npm run bundle && npx pkg bundle.cjs --target node22-macos-arm64 --output simon-darwin-arm64 && npx pkg bundle.cjs --target node22-macos-x64 --output simon-darwin-x64"
+        "prepareCmd": "bash scripts/build-binaries.sh ${nextRelease.version}"
       }
     ],
     [

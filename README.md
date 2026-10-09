@@ -4,6 +4,8 @@ A CLI for managing both real devices and iOS simulators / Android emulators — 
 
 Built entirely with AI (Claude).
 
+> **Companion tool:** [metroctl](https://github.com/hvalec427/metroctl) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
+
 > **macOS only.** simon ships as a signed macOS binary (Apple Silicon / Intel) and relies on macOS-only tooling (`xcrun`, `simctl`, `devicectl`). The installer and `simon update` are macOS-only; iOS features won't work elsewhere.
 
 ## Install
@@ -12,7 +14,7 @@ Built entirely with AI (Claude).
 curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 ```
 
-Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating & completions](docs/updating.md) for channels (stable/nightly) and shell completions.
+Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
 
 ## Uninstall
 
@@ -38,7 +40,6 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel |
 | `simon doctor` | Check your environment for the required tooling |
 | `simon check-update` / `simon update` | Check for / install a newer version |
-| `simon completions zsh` | Print a zsh completion script |
 
 Run any command with `--help` for its flags.
 
@@ -59,14 +60,21 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 
 ## Guides
 
-- [Logs](docs/logs.md) — native logs and the interactive React Native viewer (`logs --rn`)
+- [Logs](docs/logs.md) — native device logs
+- [RN dashboard](https://github.com/hvalec427/metroctl) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
 - [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
-- [Updating & completions](docs/updating.md) — release channels, self-update, zsh completions
+- [Updating](docs/updating.md) — release channels, self-update
 
 ## Requirements
 
 - **OS**: macOS (Apple Silicon or Intel)
 - **iOS**: Xcode installed
 - **Android**: Android SDK (`ANDROID_HOME` set, or SDK at `~/Library/Android/sdk`)
+
+## React Native
+
+For a full React Native workflow — Metro, build/run on devices, and the JS
+logs/network/perf viewer — see the companion tool
+**[metroctl](https://github.com/hvalec427/metroctl)**, which builds on simon.

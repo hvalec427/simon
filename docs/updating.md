@@ -1,4 +1,4 @@
-# Updating & completions
+# Updating
 
 ## Update
 
@@ -13,22 +13,18 @@ simon self-updates in place (over the binary you're running). It only uses `sudo
 
 ### Channels
 
-- **stable** (default) — tagged releases from `master`.
-- **nightly** — prereleases built from `develop` on every push (latest features, less baked).
+- **stable** (default) — tagged releases from `master`, with full changelogs.
+- **nightly** — a dated prerelease built from `develop` once a day (with a changelog), skipped on days with no code changes.
+- **dev** — the bleeding edge: rebuilt on **every** `develop` commit and published to a single **rolling** prerelease tagged `dev` (binaries overwritten in place — one release entry, never one per commit, and no changelog). The version carries a build timestamp so updates are detectable.
 
 The channel is remembered per machine, so plain `simon update` stays on whichever you picked:
 
 ```sh
-simon update --nightly        # switch to nightly and update
-simon update --stable         # back to stable
-simon check-update --nightly  # peek at the latest nightly without installing
+simon update --stable         # stable line
+simon update --nightly        # daily nightly
+simon update --dev            # every-commit dev build
+simon update --force          # reinstall / install a same-or-older build (e.g. switching rings)
+simon check-update --dev      # peek at the latest dev build without installing
 ```
 
-Each release lists its own changelog (and nightlies include a one-line install command for that exact build).
-
-## Shell completions (zsh)
-
-```sh
-simon completions zsh > ~/.simon-completion.zsh
-echo 'source ~/.simon-completion.zsh' >> ~/.zshrc   # after `autoload -U compinit && compinit`
-```
+Each stable/nightly release lists its own changelog; nightlies also include a one-line install command for that exact build. Dev builds have neither — use nightly or stable if you want notes.

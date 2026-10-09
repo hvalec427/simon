@@ -1,45 +1,16 @@
 {
   "name": "simon",
-  "version": "2.12.1",
-  "description": "CLI for managing real devices and iOS simulators / Android emulators",
-  "type": "module",
-  "bin": {
-    "simon": "./dist/index.js"
-  },
+  "version": "2.16.0",
+  "description": "CLI for managing real devices and iOS simulators / Android emulators (built in Rust; see rust/)",
+  "private": true,
   "scripts": {
-    "build": "tsc && chmod +x dist/index.js",
-    "bundle": "node scripts/bundle.mjs",
-    "build:binary": "npm run bundle && pkg bundle.cjs --targets node22-macos-arm64,node22-macos-x64 --out-path bin",
-    "dev": "tsx src/index.ts",
-    "test": "vitest run",
-    "prepublishOnly": "npm run build",
     "prepare": "husky"
-  },
-  "pkg": {
-    "scripts": "bundle.cjs"
-  },
-  "dependencies": {
-    "@inquirer/confirm": "^6.1.1",
-    "@inquirer/input": "^5.1.2",
-    "@inquirer/select": "^4.0.2",
-    "chalk": "^5.4.1",
-    "commander": "^13.1.0",
-    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@commitlint/cli": "^21.2.3",
     "@commitlint/config-conventional": "^21.2.3",
-    "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/exec": "^7.1.0",
-    "@semantic-release/git": "^10.0.1",
-    "@types/node": "^22.15.29",
-    "@types/ws": "^8.18.2",
-    "@yao-pkg/pkg": "^6.20.0",
-    "esbuild": "^0.28.1",
     "husky": "^9.1.7",
-    "semantic-release": "^25.0.9",
-    "tsx": "^4.19.4",
-    "typescript": "^5.8.3",
-    "vitest": "^5.0.3"
+    "semantic-release": "^25.0.9"
   }
 }
