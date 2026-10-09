@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Cut a nightly prerelease from develop. Runs once a day (scheduled at 23:00 UTC),
+# Cut a nightly prerelease from develop. Runs once a day (scheduled at 21:00 UTC),
 # tagged with the UTC date (e.g. 2.16.0-nightly.20261007) — one build per day, so
 # no timestamp is needed. Avoids semantic-release's git-notes push, which GitHub
 # intermittently rejects.
