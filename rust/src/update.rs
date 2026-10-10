@@ -7,7 +7,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 const REPO: &str = "hvalec427/simon";
-const DEFAULT_INSTALL_PATH: &str = "/usr/local/bin/simon";
 const UA: &str = "simon-cli";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -240,7 +239,8 @@ pub fn install_target() -> PathBuf {
             return std::fs::canonicalize(&p).unwrap_or_else(|_| PathBuf::from(p));
         }
     }
-    PathBuf::from(DEFAULT_INSTALL_PATH)
+    // Where install.sh puts it: ~/.simon/bin/simon.
+    PathBuf::from(std::env::var("HOME").unwrap_or_default()).join(".simon/bin/simon")
 }
 
 pub fn needs_sudo(target: &std::path::Path) -> bool {
