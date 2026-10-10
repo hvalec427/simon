@@ -2,12 +2,11 @@
 # Install simon into ~/.simon/bin (no sudo) and put that on your PATH.
 #   curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 #   … | sh -s -- dev        rolling dev build (or `nightly`, or a version tag)
-#   INSTALL_DIR=~/bin …      install somewhere else
 set -e
 
 TOOL="simon"
 REPO="hvalec427/simon"
-BIN_DIR="${INSTALL_DIR:-$HOME/.$TOOL/bin}"
+BIN_DIR="$HOME/.$TOOL/bin"
 
 # Detect architecture
 ARCH=$(uname -m)

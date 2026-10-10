@@ -15,7 +15,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh |
 ```
 
 It installs to `~/.simon/bin/simon` (no sudo) and adds that folder to your PATH in
-your shell config (`INSTALL_DIR=…` installs elsewhere).
+your shell config.
 
 Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
 
