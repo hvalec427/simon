@@ -20,7 +20,7 @@ pub fn run(ios: bool, android: bool) {
     if !ios_devices.is_empty() {
         println!("iOS simulators:");
         for d in ios_devices {
-            println!("  {}", d.label());
+            println!("  {}", with_id(d.label(), d.name(), d.id()));
         }
     }
     if !android_devices.is_empty() {
@@ -29,7 +29,16 @@ pub fn run(ios: bool, android: bool) {
         }
         println!("Android emulators:");
         for d in android_devices {
-            println!("  {}", d.label());
+            println!("  {}", with_id(d.label(), d.name(), d.id()));
         }
+    }
+}
+
+/// A label followed by the device's `--device` id when it isn't its name.
+pub fn with_id(label: String, name: &str, id: &str) -> String {
+    if id == name {
+        label
+    } else {
+        format!("{label}  · {id}")
     }
 }

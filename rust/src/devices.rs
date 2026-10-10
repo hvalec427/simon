@@ -52,6 +52,20 @@ impl RunningDevice {
         }
     }
 
+    /// The id `--device` takes: udid on iOS, the AVD name for an emulator
+    /// (its serial changes every boot), the adb serial for an Android phone.
+    pub fn id(&self) -> &str {
+        match self {
+            RunningDevice::IosSim { udid, .. } | RunningDevice::IosPhysical { udid, .. } => udid,
+            RunningDevice::AndroidEmulator { name, .. } => name,
+            RunningDevice::AndroidPhysical { serial, .. } => serial,
+        }
+    }
+
+    fn matches_id(&self, id: &str) -> bool {
+        self.id() == id || self.serial() == Some(id)
+    }
+
     pub fn label(&self) -> String {
         match self {
             RunningDevice::IosSim { name, runtime, .. } => format!("{name}  ({runtime} · simulator)"),
@@ -73,6 +87,14 @@ impl InstalledDevice {
     pub fn name(&self) -> &str {
         match self {
             InstalledDevice::IosSim { name, .. } | InstalledDevice::AndroidAvd { name, .. } => name,
+        }
+    }
+
+    /// See `RunningDevice::id`.
+    pub fn id(&self) -> &str {
+        match self {
+            InstalledDevice::IosSim { udid, .. } => udid,
+            InstalledDevice::AndroidAvd { name, .. } => name,
         }
     }
 
@@ -135,10 +157,7 @@ pub fn pick_installed(message: &str, filter: Option<Platform>, name: Option<&str
     }
     // A name targets a device directly (searched across all, even if running).
     if let Some(n) = name {
-        return all
-            .into_iter()
-            .find(|d| matches_name(d.name(), n) || installed_udid(d) == Some(n.to_string()))
-            .ok_or_else(|| anyhow::anyhow!("Device \"{n}\" not found."));
+        return pick_by(all, n, |d| d.id() == n, |d| d.name(), |d| d.id()).map_err(|e| anyhow::anyhow!("{e}"));
     }
     let pool: Vec<InstalledDevice> = if exclude_running { all.into_iter().filter(|d| !d.running()).collect() } else { all };
     if pool.is_empty() {
@@ -161,10 +180,7 @@ pub fn pick_running(message: &str, filter: Option<Platform>, name: Option<&str>,
         bail!("No running simulators or devices found.");
     }
     if let Some(n) = name {
-        return all
-            .into_iter()
-            .find(|d| matches_name(d.name(), n))
-            .ok_or_else(|| anyhow::anyhow!("Device \"{n}\" not found or not running."));
+        return pick_by(all, n, |d| d.matches_id(n), |d| d.name(), |d| d.id()).map_err(|e| anyhow::anyhow!("{e} (or not running)"));
     }
     if all.len() == 1 {
         return Ok(all.into_iter().next().unwrap());
@@ -172,15 +188,41 @@ pub fn pick_running(message: &str, filter: Option<Platform>, name: Option<&str>,
     Select::new(message, all).prompt().map_err(|_| anyhow::anyhow!("cancelled"))
 }
 
-fn matches_name(candidate: &str, name: &str) -> bool {
-    candidate == name
+/// The device `n` names: an id match first, else the only one with that name.
+fn pick_by<T>(all: Vec<T>, n: &str, by_id: impl Fn(&T) -> bool, name: impl Fn(&T) -> &str, id: impl Fn(&T) -> &str) -> Result<T> {
+    if let Some(i) = all.iter().position(&by_id) {
+        return Ok(all.into_iter().nth(i).unwrap());
+    }
+    let mut named: Vec<T> = all.into_iter().filter(|d| name(d) == n).collect();
+    match named.len() {
+        0 => bail!("Device \"{n}\" not found."),
+        1 => Ok(named.remove(0)),
+        _ => bail!("Several devices are named \"{n}\"; pass an id instead: {}", named.iter().map(&id).collect::<Vec<_>>().join(", ")),
+    }
 }
 
-fn installed_udid(d: &InstalledDevice) -> Option<String> {
-    match d {
-        InstalledDevice::IosSim { udid, .. } => Some(udid.clone()),
-        InstalledDevice::AndroidAvd { .. } => None,
+/// A device found by `find_device`.
+#[derive(Debug, Clone)]
+pub enum Found {
+    Running(RunningDevice),
+    /// A simulator or emulator that isn't booted.
+    Stopped(InstalledDevice),
+}
+
+/// Resolve a `--device` value the same way in every tool: an iOS udid, an AVD
+/// name, an adb serial, or a device name that only one device has. Running
+/// devices win over stopped ones.
+pub fn find_device(id: &str) -> Result<Found> {
+    let ambiguous = |e: &anyhow::Error| e.to_string().starts_with("Several");
+    match pick_by(get_all_running(None), id, |d| d.matches_id(id), |d| d.name(), |d| d.id()) {
+        Ok(d) => return Ok(Found::Running(d)),
+        Err(e) if ambiguous(&e) => return Err(e),
+        Err(_) => {}
     }
+    let stopped = get_all_installed(None).into_iter().filter(|d| !d.running()).collect();
+    pick_by(stopped, id, |d| d.id() == id, |d| d.name(), |d| d.id())
+        .map(Found::Stopped)
+        .map_err(|e| if ambiguous(&e) { e } else { anyhow::anyhow!("No device \"{id}\" (an iOS udid, AVD name, adb serial or device name; see `simon list` and `simon running`).") })
 }
 
 pub fn get_all_running(filter: Option<Platform>) -> Vec<RunningDevice> {

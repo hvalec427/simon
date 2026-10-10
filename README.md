@@ -53,13 +53,25 @@ Every device command picks its target the same way:
 - **a single device** → used automatically, no prompt
 - **no flag** → pick from a combined list of all devices
 - **`-i` / `-a`** → limit the list to iOS / Android
-- **a name** → target that device directly (on either platform — no `-i`/`-a` needed)
+- **a name or id** (or `--device <id>`) → target that device directly (on either platform — no `-i`/`-a` needed)
 
 ```sh
 simon launch                 # pick any simulator/emulator from a list
 simon launch -a              # limit the picker to Android
 simon launch "iPhone 16"     # launch that one directly, no flag needed
+simon --device Pixel_8 open-link myapp://home
 ```
+
+Every tool targets a device by the same `--device` id, the one `simon list`,
+`simon running`, `touchctl devices` and metroctl's Devices pane show:
+
+| Device | id |
+|---|---|
+| iOS simulator or iPhone | its udid |
+| Android emulator | its AVD name (its `emulator-5554` serial changes every boot, though that works too) |
+| Android phone | its adb serial |
+
+A device name works as well when only one device has it.
 
 ## Guides
 

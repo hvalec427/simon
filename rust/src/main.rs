@@ -9,6 +9,9 @@ use simon::commands;
 #[derive(Parser)]
 #[command(name = "simon", version, about = "Manage iOS simulators and Android emulators")]
 struct Cli {
+    /// Target device: iOS udid, AVD name, adb serial, or a name only one device has
+    #[arg(long, global = true)]
+    device: Option<String>,
     #[command(subcommand)]
     command: Command,
 }
@@ -165,25 +168,28 @@ enum Command {
 
 fn main() {
     let cli = Cli::parse();
+    // --device works like naming the device positionally.
+    let dev = cli.device;
+    let pick = |name: Option<String>| dev.clone().or(name);
     match cli.command {
         Command::List { ios, android } => commands::list::run(ios, android),
         Command::Create { ios, android } => commands::create::run(ios, android),
         Command::Running => commands::running::run(),
         Command::Logs { name, ios, android, filter, app } => {
-            commands::logs::run(name, ios, android, filter, app)
+            commands::logs::run(pick(name), ios, android, filter, app)
         }
-        Command::Launch { ios, android, name } => commands::launch::run(ios, android, name),
-        Command::Stop { ios, android, name } => commands::stop::run(ios, android, name),
-        Command::Delete { ios, android, name } => commands::delete::run(ios, android, name),
-        Command::Wipe { ios, android, name } => commands::wipe::run(ios, android, name),
+        Command::Launch { ios, android, name } => commands::launch::run(ios, android, pick(name)),
+        Command::Stop { ios, android, name } => commands::stop::run(ios, android, pick(name)),
+        Command::Delete { ios, android, name } => commands::delete::run(ios, android, pick(name)),
+        Command::Wipe { ios, android, name } => commands::wipe::run(ios, android, pick(name)),
         Command::OpenLink { url, name, ios, android, bundle_id, restart } => {
-            commands::open_link::run(url, name, ios, android, bundle_id, restart)
+            commands::open_link::run(url, pick(name), ios, android, bundle_id, restart)
         }
         Command::Location { coords, name, ios, android, reset } => {
-            commands::location::run(coords, name, ios, android, reset)
+            commands::location::run(coords, pick(name), ios, android, reset)
         }
         Command::Push { payload, ios, bundle_id, template, token, fcm, apns } => {
-            commands::push::run(payload, ios, bundle_id, template, token, fcm, apns)
+            commands::push::run(payload, dev.clone().or(ios), bundle_id, template, token, fcm, apns)
         }
         Command::Tunnel { action } => commands::tunnel::run(action),
         Command::Doctor => commands::doctor::run(),
