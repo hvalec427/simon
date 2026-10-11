@@ -5,7 +5,7 @@ edition = "2021"
 description = "A CLI for managing iOS simulators, Android emulators, and physical devices"
 default-run = "simon"
 
-# Library (reused by the metroctl tool, which depends on this repo by git) + CLI.
+# Library (reused by the signalbox tool, which depends on this repo by git) + CLI.
 [lib]
 name = "simon"
 path = "src/lib.rs"

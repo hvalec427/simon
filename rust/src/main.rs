@@ -39,7 +39,7 @@ enum Command {
     },
     /// Show currently running simulators and emulators
     Running,
-    /// Stream logs from a running device (React Native JS logs: use `metroctl logs`)
+    /// Stream logs from a running device (React Native JS logs: use `signalbox logs`)
     Logs {
         name: Option<String>,
         #[arg(short, long, num_args = 0..=1, default_missing_value = "")]

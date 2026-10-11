@@ -4,7 +4,7 @@ A CLI for managing both real devices and iOS simulators / Android emulators — 
 
 Built entirely with AI (Claude).
 
-> **Companion tool:** [metroctl](https://github.com/hvalec427/metroctl) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
+> **Companion tool:** [signalbox](https://github.com/hvalec427/signalbox) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
 
 > **macOS only.** simon ships as a signed macOS binary (Apple Silicon / Intel) and relies on macOS-only tooling (`xcrun`, `simctl`, `devicectl`). The installer and `simon update` are macOS-only; iOS features won't work elsewhere.
 
@@ -63,7 +63,7 @@ simon --device Pixel_8 open-link myapp://home
 ```
 
 Every tool targets a device by the same `--device` id, the one `simon list`,
-`simon running`, `touchctl devices` and metroctl's Devices pane show:
+`simon running`, `boop devices` and signalbox's Devices pane show:
 
 | Device | id |
 |---|---|
@@ -76,7 +76,7 @@ A device name works as well when only one device has it.
 ## Guides
 
 - [Logs](docs/logs.md) — native device logs
-- [RN dashboard](https://github.com/hvalec427/metroctl) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
+- [RN dashboard](https://github.com/hvalec427/signalbox) — **signalbox**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
 - [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
@@ -92,4 +92,4 @@ A device name works as well when only one device has it.
 
 For a full React Native workflow — Metro, build/run on devices, and the JS
 logs/network/perf viewer — see the companion tool
-**[metroctl](https://github.com/hvalec427/metroctl)**, which builds on simon.
+**[signalbox](https://github.com/hvalec427/signalbox)**, which builds on simon.
