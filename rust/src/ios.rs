@@ -272,7 +272,11 @@ pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let devices = data["result"]["devices"].as_array().cloned().unwrap_or_default();
     devices
         .into_iter()
-        .filter(|d| !d["connectionProperties"]["transportType"].is_null())
+        // Xcode 27's devicectl also lists simulators ("reality": "simulated").
+        .filter(|d| {
+            !d["connectionProperties"]["transportType"].is_null()
+                && d["hardwareProperties"]["reality"].as_str().map_or(true, |r| r == "physical")
+        })
         .map(|d| PhysicalIosDevice {
             name: d["deviceProperties"]["name"]
                 .as_str()
