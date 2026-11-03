@@ -86,9 +86,14 @@ pub fn boot_simulator(udid: &str) -> anyhow::Result<()> {
     let _ = Command::new("xcrun")
         .args(["simctl", "boot", udid])
         .output();
+    let app = simulator_app();
+    if is_device_hub(&app) {
+        // A Simulator.app left over from an older Xcode would also show it.
+        let _ = Command::new("osascript").args(["-e", QUIT_SIMULATOR_APP]).output();
+    }
     let _ = Command::new("open")
         .arg("-a")
-        .arg(simulator_app())
+        .arg(&app)
         .args(["--args", "-CurrentDeviceUDID", udid])
         .spawn();
     Ok(())
@@ -107,6 +112,15 @@ pub fn simulator_app() -> String {
     dev.and_then(|d| simulator_app_in(std::path::Path::new(&d)))
         .unwrap_or_else(|| "Simulator".to_string())
 }
+
+/// Whether `app` (from [`simulator_app`]) is Xcode 27's Device Hub.
+pub fn is_device_hub(app: &str) -> bool {
+    app.ends_with("/DeviceHub.app")
+}
+
+/// AppleScript that quits Simulator.app (any Xcode's) if it's running; booted
+/// simulators keep running.
+pub const QUIT_SIMULATOR_APP: &str = r#"if application id "com.apple.iphonesimulator" is running then quit application id "com.apple.iphonesimulator""#;
 
 /// Viewer app inside an Xcode `Contents/Developer` dir, if it has one.
 fn simulator_app_in(developer: &std::path::Path) -> Option<String> {
@@ -346,6 +360,7 @@ mod tests {
             hub.ends_with("Contents/Applications/DeviceHub.app"),
             "{hub}"
         );
+        assert!(super::is_device_hub(&hub) && !super::is_device_hub(&sim));
 
         fs::remove_dir_all(&xcode).unwrap();
         assert_eq!(simulator_app_in(&dev), None);
