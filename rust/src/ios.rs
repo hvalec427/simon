@@ -83,9 +83,40 @@ fn simctl(args: &[&str]) -> anyhow::Result<()> {
 
 pub fn boot_simulator(udid: &str) -> anyhow::Result<()> {
     // Boot may fail if it's already booted — that's fine.
-    let _ = Command::new("xcrun").args(["simctl", "boot", udid]).output();
-    let _ = Command::new("open").args(["-a", "Simulator"]).spawn();
+    let _ = Command::new("xcrun")
+        .args(["simctl", "boot", udid])
+        .output();
+    let _ = Command::new("open")
+        .arg("-a")
+        .arg(simulator_app())
+        .args(["--args", "-CurrentDeviceUDID", udid])
+        .spawn();
     Ok(())
+}
+
+/// The app that shows simulators for the selected Xcode (`xcode-select -p`):
+/// Device Hub from Xcode 27, Simulator.app before that. Falls back to
+/// whatever LaunchServices calls "Simulator".
+pub fn simulator_app() -> String {
+    let dev = Command::new("xcode-select")
+        .arg("-p")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    dev.and_then(|d| simulator_app_in(std::path::Path::new(&d)))
+        .unwrap_or_else(|| "Simulator".to_string())
+}
+
+/// Viewer app inside an Xcode `Contents/Developer` dir, if it has one.
+fn simulator_app_in(developer: &std::path::Path) -> Option<String> {
+    [
+        developer.join("../Applications/DeviceHub.app"),
+        developer.join("Applications/Simulator.app"),
+    ]
+    .into_iter()
+    .find(|p| p.is_dir())
+    .map(|p| p.canonicalize().unwrap_or(p).display().to_string())
 }
 
 pub fn shutdown_simulator(udid: &str) -> anyhow::Result<()> {
@@ -291,4 +322,32 @@ pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
             os_version: d["deviceProperties"]["osVersionNumber"].as_str().unwrap_or("").to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::simulator_app_in;
+    use std::fs;
+
+    #[test]
+    fn prefers_device_hub_over_simulator_app() {
+        let xcode = std::env::temp_dir().join(format!("simon-xcode-{}", std::process::id()));
+        let dev = xcode.join("Contents/Developer");
+        fs::create_dir_all(dev.join("Applications/Simulator.app")).unwrap();
+        let sim = simulator_app_in(&dev).unwrap();
+        assert!(
+            sim.ends_with("Developer/Applications/Simulator.app"),
+            "{sim}"
+        );
+
+        fs::create_dir_all(xcode.join("Contents/Applications/DeviceHub.app")).unwrap();
+        let hub = simulator_app_in(&dev).unwrap();
+        assert!(
+            hub.ends_with("Contents/Applications/DeviceHub.app"),
+            "{hub}"
+        );
+
+        fs::remove_dir_all(&xcode).unwrap();
+        assert_eq!(simulator_app_in(&dev), None);
+    }
 }
