@@ -6,6 +6,7 @@ pub mod android;
 pub mod androidmock;
 pub mod commands;
 pub mod devices;
+pub mod feedback;
 pub mod goios;
 pub mod ios;
 pub mod push;

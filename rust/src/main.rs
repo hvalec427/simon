@@ -141,6 +141,15 @@ enum Command {
     Tunnel { action: Option<String> },
     /// Check your environment for the required tooling
     Doctor,
+    /// Send feedback (a bug, an idea) to simon's author
+    Feedback {
+        /// Short summary (prompted for if omitted)
+        #[arg(short, long)]
+        title: Option<String>,
+        /// Details (prompted for if omitted; optional)
+        #[arg(short, long)]
+        message: Option<String>,
+    },
     /// Check whether a newer version of simon is available
     #[command(name = "check-update")]
     CheckUpdate {
@@ -186,6 +195,7 @@ fn main() {
         }
         Command::Tunnel { action } => commands::tunnel::run(action),
         Command::Doctor => commands::doctor::run(),
+        Command::Feedback { title, message } => commands::feedback::run(title, message),
         Command::CheckUpdate { stable, nightly, dev } => commands::check_update::run(stable, nightly, dev),
         Command::Update { stable, nightly, dev, force } => commands::update::run(stable, nightly, dev, force),
     }

@@ -42,6 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon push <payload>` | Send a push to a simulator, or a real device with `--token` |
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel |
 | `simon doctor` | Check your environment for the required tooling |
+| `simon feedback` | Send a bug report or idea ([details](docs/feedback.md)) |
 | `simon check-update` / `simon update` | Check for / install a newer version |
 
 Run any command with `--help` for its flags.
@@ -81,6 +82,7 @@ A device name works as well when only one device has it.
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
 - [Updating](docs/updating.md) — release channels, self-update
+- [Feedback](docs/feedback.md) — send a bug report or idea from the terminal
 
 ## Requirements
 
