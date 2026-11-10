@@ -9,13 +9,7 @@ pub fn tunnel_log() -> std::path::PathBuf {
 }
 
 pub fn has_go_ios() -> bool {
-    Command::new("sh")
-        .args(["-c", "command -v ios"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    Command::new("sh").args(["-c", "command -v ios"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
 }
 
 /// go-ios isn't a first-party tool, so install it on demand the first time a
@@ -41,13 +35,7 @@ pub fn ensure_go_ios() -> Result<()> {
 }
 
 pub fn tunnel_running() -> bool {
-    Command::new("pgrep")
-        .args(["-f", "ios tunnel start"])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false)
+    Command::new("pgrep").args(["-f", "ios tunnel start"]).stdout(Stdio::null()).stderr(Stdio::null()).status().map(|s| s.success()).unwrap_or(false)
 }
 
 /// iOS 17+ needs a root developer tunnel. Started via `nohup … &` so sudo keeps
@@ -62,10 +50,7 @@ pub fn ensure_tunnel() -> Result<()> {
         bail!("Could not get sudo to start the developer tunnel. Start it manually:  sudo ios tunnel start");
     }
     let log = tunnel_log();
-    let _ = Command::new("sh")
-        .arg("-c")
-        .arg(format!("nohup sudo ios tunnel start > {:?} 2>&1 &", log))
-        .status();
+    let _ = Command::new("sh").arg("-c").arg(format!("nohup sudo ios tunnel start > {:?} 2>&1 &", log)).status();
 
     for i in 0..24 {
         if tunnel_running() {
@@ -76,10 +61,7 @@ pub fn ensure_tunnel() -> Result<()> {
         let _ = i;
         std::thread::sleep(std::time::Duration::from_millis(500));
     }
-    bail!(
-        "The developer tunnel did not start. Check {}, or run it manually:  sudo ios tunnel start",
-        log.display()
-    )
+    bail!("The developer tunnel did not start. Check {}, or run it manually:  sudo ios tunnel start", log.display())
 }
 
 pub fn stop_tunnel() -> bool {

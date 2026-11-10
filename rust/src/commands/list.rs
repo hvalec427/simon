@@ -12,10 +12,8 @@ pub fn run(ios: bool, android: bool) {
         return;
     }
 
-    let ios_devices: Vec<&InstalledDevice> =
-        devices.iter().filter(|d| matches!(d, InstalledDevice::IosSim { .. })).collect();
-    let android_devices: Vec<&InstalledDevice> =
-        devices.iter().filter(|d| matches!(d, InstalledDevice::AndroidAvd { .. })).collect();
+    let ios_devices: Vec<&InstalledDevice> = devices.iter().filter(|d| matches!(d, InstalledDevice::IosSim { .. })).collect();
+    let android_devices: Vec<&InstalledDevice> = devices.iter().filter(|d| matches!(d, InstalledDevice::AndroidAvd { .. })).collect();
 
     if !ios_devices.is_empty() {
         println!("iOS simulators:");

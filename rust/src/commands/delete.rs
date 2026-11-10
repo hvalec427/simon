@@ -12,10 +12,7 @@ pub fn run(ios_flag: Option<String>, android_flag: Option<String>, name_arg: Opt
         }
     };
 
-    let confirmed = Confirm::new(&format!("Delete {}? This can't be undone.", device.name()))
-        .with_default(false)
-        .prompt()
-        .unwrap_or(false);
+    let confirmed = Confirm::new(&format!("Delete {}? This can't be undone.", device.name())).with_default(false).prompt().unwrap_or(false);
     if !confirmed {
         println!("Cancelled.");
         return;

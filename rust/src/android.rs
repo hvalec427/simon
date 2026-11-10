@@ -104,20 +104,13 @@ pub fn running_avd_names() -> Vec<String> {
 /// Locate `avdmanager` across the SDK layouts, falling back to the bare name.
 fn find_avdmanager() -> String {
     let sdk = sdk_root();
-    let mut candidates = vec![
-        sdk.join("cmdline-tools/latest/bin/avdmanager"),
-        sdk.join("tools/bin/avdmanager"),
-    ];
+    let mut candidates = vec![sdk.join("cmdline-tools/latest/bin/avdmanager"), sdk.join("tools/bin/avdmanager")];
     if let Ok(entries) = std::fs::read_dir(sdk.join("cmdline-tools")) {
         for e in entries.flatten() {
             candidates.push(e.path().join("bin/avdmanager"));
         }
     }
-    candidates
-        .into_iter()
-        .find(|p| p.exists())
-        .map(|p| p.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "avdmanager".to_string())
+    candidates.into_iter().find(|p| p.exists()).map(|p| p.to_string_lossy().into_owned()).unwrap_or_else(|| "avdmanager".to_string())
 }
 
 #[derive(Debug, Clone)]
@@ -267,9 +260,7 @@ pub fn open_url_with_package(serial: &str, url: &str, package: Option<&str>) -> 
 /// Launch an app by its package's default LAUNCHER activity.
 pub fn launch_app(serial: &str, package: &str) -> anyhow::Result<()> {
     let adb = find_bin("adb");
-    let out = Command::new(&adb)
-        .args(["-s", serial, "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"])
-        .output()?;
+    let out = Command::new(&adb).args(["-s", serial, "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"]).output()?;
     if !out.status.success() {
         anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
     }

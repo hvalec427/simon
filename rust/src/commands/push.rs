@@ -43,11 +43,7 @@ pub fn run(payload: Option<String>, ios: Option<String>, bundle_id: Option<Strin
         std::process::exit(1);
     }
 
-    let res = if let Some(tok) = token {
-        send_to_token(&payload, &tok, fcm, apns)
-    } else {
-        send_to_simulator(&payload, ios, bundle_id)
-    };
+    let res = if let Some(tok) = token { send_to_token(&payload, &tok, fcm, apns) } else { send_to_simulator(&payload, ios, bundle_id) };
     if let Err(e) = res {
         eprintln!("{e}");
         std::process::exit(1);
@@ -62,10 +58,15 @@ fn send_to_token(payload: &str, token: &str, fcm: bool, apns: bool) -> anyhow::R
             anyhow::bail!("No push config found at {}.\nCreate it from a template in the README (FCM or APNs).", push_config_path().display());
         }
     };
-    let override_t = if fcm { Some(Transport::Fcm) } else if apns { Some(Transport::Apns) } else { None };
+    let override_t = if fcm {
+        Some(Transport::Fcm)
+    } else if apns {
+        Some(Transport::Apns)
+    } else {
+        None
+    };
     let transport = resolve_transport(&cfg, override_t)?;
-    let body: Value = serde_json::from_str(&std::fs::read_to_string(payload)?)
-        .map_err(|_| anyhow::anyhow!("Could not parse {payload} as JSON."))?;
+    let body: Value = serde_json::from_str(&std::fs::read_to_string(payload)?).map_err(|_| anyhow::anyhow!("Could not parse {payload} as JSON."))?;
 
     match transport {
         Transport::Fcm => {
@@ -84,10 +85,7 @@ fn send_to_token(payload: &str, token: &str, fcm: bool, apns: bool) -> anyhow::R
 
 fn send_to_simulator(payload: &str, ios: Option<String>, bundle_id: Option<String>) -> anyhow::Result<()> {
     let name = ios.filter(|s| !s.is_empty());
-    let sims: Vec<RunningDevice> = get_all_running(None)
-        .into_iter()
-        .filter(|d| matches!(d, RunningDevice::IosSim { .. }))
-        .collect();
+    let sims: Vec<RunningDevice> = get_all_running(None).into_iter().filter(|d| matches!(d, RunningDevice::IosSim { .. })).collect();
 
     if sims.is_empty() {
         anyhow::bail!("No iOS simulators running.\nBoot one with `simon launch -i`.");

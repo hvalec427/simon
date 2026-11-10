@@ -25,12 +25,7 @@ fn helper_installed(serial: &str) -> bool {
 fn install_helper(serial: &str) -> Result<()> {
     eprintln!("Installing the mock-location helper app...");
     let tmp = std::env::temp_dir().join("simon-mock-location.apk");
-    let ok = Command::new("curl")
-        .args(["-fsSL", APK_URL, "-o"])
-        .arg(&tmp)
-        .status()
-        .map(|s| s.success())
-        .unwrap_or(false);
+    let ok = Command::new("curl").args(["-fsSL", APK_URL, "-o"]).arg(&tmp).status().map(|s| s.success()).unwrap_or(false);
     if !ok {
         bail!(
             "Mock-location helper setup failed: could not download the helper APK.\n\

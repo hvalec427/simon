@@ -16,7 +16,6 @@ struct Cli {
     command: Command,
 }
 
-
 #[derive(Subcommand)]
 enum Command {
     /// List all simulators and emulators
@@ -175,19 +174,13 @@ fn main() {
         Command::List { ios, android } => commands::list::run(ios, android),
         Command::Create { ios, android } => commands::create::run(ios, android),
         Command::Running => commands::running::run(),
-        Command::Logs { name, ios, android, filter, app } => {
-            commands::logs::run(pick(name), ios, android, filter, app)
-        }
+        Command::Logs { name, ios, android, filter, app } => commands::logs::run(pick(name), ios, android, filter, app),
         Command::Launch { ios, android, name } => commands::launch::run(ios, android, pick(name)),
         Command::Stop { ios, android, name } => commands::stop::run(ios, android, pick(name)),
         Command::Delete { ios, android, name } => commands::delete::run(ios, android, pick(name)),
         Command::Wipe { ios, android, name } => commands::wipe::run(ios, android, pick(name)),
-        Command::OpenLink { url, name, ios, android, bundle_id, restart } => {
-            commands::open_link::run(url, pick(name), ios, android, bundle_id, restart)
-        }
-        Command::Location { coords, name, ios, android, reset } => {
-            commands::location::run(coords, pick(name), ios, android, reset)
-        }
+        Command::OpenLink { url, name, ios, android, bundle_id, restart } => commands::open_link::run(url, pick(name), ios, android, bundle_id, restart),
+        Command::Location { coords, name, ios, android, reset } => commands::location::run(coords, pick(name), ios, android, reset),
         Command::Push { payload, ios, bundle_id, template, token, fcm, apns } => {
             commands::push::run(payload, dev.clone().or(ios), bundle_id, template, token, fcm, apns)
         }

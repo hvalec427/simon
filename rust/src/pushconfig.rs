@@ -52,9 +52,7 @@ pub fn load_push_config() -> Result<Option<PushConfig>> {
         return Ok(None);
     }
     let raw = std::fs::read_to_string(&p)?;
-    serde_json::from_str(&raw)
-        .map(Some)
-        .map_err(|_| anyhow::anyhow!("Could not parse {} — is it valid JSON?", p.display()))
+    serde_json::from_str(&raw).map(Some).map_err(|_| anyhow::anyhow!("Could not parse {} — is it valid JSON?", p.display()))
 }
 
 /// Pick the transport from an explicit override, else the config's default, else

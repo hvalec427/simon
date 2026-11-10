@@ -37,9 +37,7 @@ struct SimctlDevice {
 /// Turn "iOS-17-0" into "iOS 17.0": strip the SimRuntime prefix, swap dashes for
 /// spaces, then join a trailing "<major> <minor>" pair with a dot.
 fn tidy_runtime(raw: &str) -> String {
-    let spaced = raw
-        .replace("com.apple.CoreSimulator.SimRuntime.", "")
-        .replace('-', " ");
+    let spaced = raw.replace("com.apple.CoreSimulator.SimRuntime.", "").replace('-', " ");
     let parts: Vec<&str> = spaced.split_whitespace().collect();
     if parts.len() >= 3 {
         let (n2, n1) = (parts[parts.len() - 1], parts[parts.len() - 2]);
@@ -157,9 +155,7 @@ pub fn launch_app_on_simulator(udid: &str, bundle_id: &str) -> anyhow::Result<()
 /// Launch an app on a physical device by bundle id (devicectl).
 pub fn launch_app_on_physical_ios(udid: &str, bundle_id: &str) -> anyhow::Result<()> {
     ensure_devicectl()?;
-    let out = Command::new("xcrun")
-        .args(["devicectl", "device", "process", "launch", "--device", udid, bundle_id])
-        .output()?;
+    let out = Command::new("xcrun").args(["devicectl", "device", "process", "launch", "--device", udid, bundle_id]).output()?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr).lines().map(|l| l.trim()).find(|l| !l.is_empty()).unwrap_or("").to_string();
         anyhow::bail!("Failed to launch \"{bundle_id}\"{}", if detail.is_empty() { ".".into() } else { format!(":\n  {detail}") });
@@ -299,10 +295,7 @@ pub fn create_simulator(name: &str, device_type: &str, runtime: &str) -> anyhow:
 
 pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let tmp = std::env::temp_dir().join("simon-devicectl.json");
-    let status = Command::new("xcrun")
-        .args(["devicectl", "list", "devices", "--json-output"])
-        .arg(&tmp)
-        .output();
+    let status = Command::new("xcrun").args(["devicectl", "list", "devices", "--json-output"]).arg(&tmp).output();
     if !matches!(status, Ok(ref o) if o.status.success()) {
         return Vec::new();
     }
@@ -318,21 +311,10 @@ pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     devices
         .into_iter()
         // Xcode 27's devicectl also lists simulators ("reality": "simulated").
-        .filter(|d| {
-            !d["connectionProperties"]["transportType"].is_null()
-                && d["hardwareProperties"]["reality"].as_str().map_or(true, |r| r == "physical")
-        })
+        .filter(|d| !d["connectionProperties"]["transportType"].is_null() && d["hardwareProperties"]["reality"].as_str().map_or(true, |r| r == "physical"))
         .map(|d| PhysicalIosDevice {
-            name: d["deviceProperties"]["name"]
-                .as_str()
-                .or_else(|| d["hardwareProperties"]["marketingName"].as_str())
-                .unwrap_or("Unknown")
-                .to_string(),
-            udid: d["hardwareProperties"]["udid"]
-                .as_str()
-                .or_else(|| d["identifier"].as_str())
-                .unwrap_or("")
-                .to_string(),
+            name: d["deviceProperties"]["name"].as_str().or_else(|| d["hardwareProperties"]["marketingName"].as_str()).unwrap_or("Unknown").to_string(),
+            udid: d["hardwareProperties"]["udid"].as_str().or_else(|| d["identifier"].as_str()).unwrap_or("").to_string(),
             os_version: d["deviceProperties"]["osVersionNumber"].as_str().unwrap_or("").to_string(),
         })
         .collect()

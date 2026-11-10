@@ -140,11 +140,7 @@ pub fn resolve_target(ios: &Option<String>, android: &Option<String>, positional
     } else {
         None
     };
-    let name = ios
-        .clone()
-        .filter(|s| !s.is_empty())
-        .or_else(|| android.clone().filter(|s| !s.is_empty()))
-        .or(positional);
+    let name = ios.clone().filter(|s| !s.is_empty()).or_else(|| android.clone().filter(|s| !s.is_empty())).or(positional);
     (filter, name)
 }
 
@@ -220,9 +216,13 @@ pub fn find_device(id: &str) -> Result<Found> {
         Err(_) => {}
     }
     let stopped = get_all_installed(None).into_iter().filter(|d| !d.running()).collect();
-    pick_by(stopped, id, |d| d.id() == id, |d| d.name(), |d| d.id())
-        .map(Found::Stopped)
-        .map_err(|e| if ambiguous(&e) { e } else { anyhow::anyhow!("No device \"{id}\" (an iOS udid, AVD name, adb serial or device name; see `simon list` and `simon running`).") })
+    pick_by(stopped, id, |d| d.id() == id, |d| d.name(), |d| d.id()).map(Found::Stopped).map_err(|e| {
+        if ambiguous(&e) {
+            e
+        } else {
+            anyhow::anyhow!("No device \"{id}\" (an iOS udid, AVD name, adb serial or device name; see `simon list` and `simon running`).")
+        }
+    })
 }
 
 pub fn get_all_running(filter: Option<Platform>) -> Vec<RunningDevice> {

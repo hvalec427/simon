@@ -1,5 +1,5 @@
 use crate::android::{find_bin, sdk_root};
-use crate::update::{current_version, latest_for_channel, current_channel};
+use crate::update::{current_channel, current_version, latest_for_channel};
 use std::process::Command;
 
 enum Status {
@@ -75,7 +75,12 @@ fn emulator_check() -> Check {
     if std::path::Path::new(&emu).exists() {
         Check { status: Status::Ok, label: "emulator".into(), detail: Some(emu), fix: None }
     } else {
-        Check { status: Status::Warn, label: "emulator".into(), detail: Some("not found".into()), fix: Some("Install the emulator package via SDK Manager".into()) }
+        Check {
+            status: Status::Warn,
+            label: "emulator".into(),
+            detail: Some("not found".into()),
+            fix: Some("Install the emulator package via SDK Manager".into()),
+        }
     }
 }
 

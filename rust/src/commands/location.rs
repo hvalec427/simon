@@ -14,13 +14,7 @@ fn parse_coords(coords: &str) -> Option<(String, String)> {
     Some((lat.to_string(), lon.to_string()))
 }
 
-pub fn run(
-    coords: Option<String>,
-    name_arg: Option<String>,
-    ios_flag: Option<String>,
-    android_flag: Option<String>,
-    reset: bool,
-) {
+pub fn run(coords: Option<String>, name_arg: Option<String>, ios_flag: Option<String>, android_flag: Option<String>, reset: bool) {
     let (filter, name) = resolve_target(&ios_flag, &android_flag, name_arg);
 
     let parsed = if reset {

@@ -53,10 +53,7 @@ pub fn send_fcm(service_account_path: &str, token: &str, payload: Value) -> Resu
     let jwt = encode(&Header::new(Algorithm::RS256), &claims, &key)?;
 
     let client = ua_client();
-    let auth = client
-        .post(&token_uri)
-        .form(&[("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"), ("assertion", &jwt)])
-        .send()?;
+    let auth = client.post(&token_uri).form(&[("grant_type", "urn:ietf:params:oauth:grant-type:jwt-bearer"), ("assertion", &jwt)]).send()?;
     if !auth.status().is_success() {
         bail!("FCM auth failed ({}): {}", auth.status(), auth.text().unwrap_or_default().trim());
     }
@@ -95,8 +92,7 @@ struct ApnsClaims<'a> {
 }
 
 pub fn send_apns(cfg: &ApnsConfig, token: &str, aps: Value) -> Result<()> {
-    let pem = std::fs::read_to_string(expand_path(&cfg.key_file))
-        .map_err(|_| anyhow::anyhow!("Could not read the APNs key file at {}", cfg.key_file))?;
+    let pem = std::fs::read_to_string(expand_path(&cfg.key_file)).map_err(|_| anyhow::anyhow!("Could not read the APNs key file at {}", cfg.key_file))?;
     let mut header = Header::new(Algorithm::ES256);
     header.kid = Some(cfg.key_id.clone());
     let claims = ApnsClaims { iss: &cfg.team_id, iat: now_secs() };
