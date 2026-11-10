@@ -74,7 +74,7 @@ pub fn list_simulators() -> Vec<Simulator> {
 fn simctl(args: &[&str]) -> anyhow::Result<()> {
     let out = Command::new("xcrun").arg("simctl").args(args).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -288,7 +288,7 @@ pub fn list_runtimes() -> Vec<Runtime> {
 pub fn create_simulator(name: &str, device_type: &str, runtime: &str) -> anyhow::Result<String> {
     let out = Command::new("xcrun").args(["simctl", "create", name, device_type, runtime]).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
@@ -311,7 +311,7 @@ pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     devices
         .into_iter()
         // Xcode 27's devicectl also lists simulators ("reality": "simulated").
-        .filter(|d| !d["connectionProperties"]["transportType"].is_null() && d["hardwareProperties"]["reality"].as_str().map_or(true, |r| r == "physical"))
+        .filter(|d| !d["connectionProperties"]["transportType"].is_null() && d["hardwareProperties"]["reality"].as_str().is_none_or(|r| r == "physical"))
         .map(|d| PhysicalIosDevice {
             name: d["deviceProperties"]["name"].as_str().or_else(|| d["hardwareProperties"]["marketingName"].as_str()).unwrap_or("Unknown").to_string(),
             udid: d["hardwareProperties"]["udid"].as_str().or_else(|| d["identifier"].as_str()).unwrap_or("").to_string(),

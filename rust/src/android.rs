@@ -211,7 +211,7 @@ pub fn create_avd(name: &str, device_id: &str, system_image: &str) -> anyhow::Re
     }
     let out = child.wait_with_output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -252,7 +252,7 @@ pub fn open_url_with_package(serial: &str, url: &str, package: Option<&str>) -> 
     }
     let out = Command::new(&adb).args(&args).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -262,7 +262,7 @@ pub fn launch_app(serial: &str, package: &str) -> anyhow::Result<()> {
     let adb = find_bin("adb");
     let out = Command::new(&adb).args(["-s", serial, "shell", "monkey", "-p", package, "-c", "android.intent.category.LAUNCHER", "1"]).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -303,7 +303,7 @@ pub fn emu_geo_fix(serial: &str, lon: &str, lat: &str) -> anyhow::Result<()> {
     let adb = find_bin("adb");
     let out = Command::new(&adb).args(["-s", serial, "emu", "geo", "fix", lon, lat]).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
@@ -311,7 +311,7 @@ pub fn emu_geo_fix(serial: &str, lon: &str, lat: &str) -> anyhow::Result<()> {
 pub fn delete_avd(name: &str) -> anyhow::Result<()> {
     let out = Command::new(find_avdmanager()).args(["delete", "avd", "-n", name]).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }

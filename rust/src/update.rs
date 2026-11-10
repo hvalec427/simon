@@ -117,7 +117,7 @@ fn strip_install(body: &str) -> String {
     let lower = body.to_lowercase();
     if let Some(idx) = lower.find("install this build") {
         // back up to the start of that heading line
-        let head = body[..idx].rfind('\n').map(|n| n).unwrap_or(0);
+        let head = body[..idx].rfind('\n').unwrap_or(0);
         body[..head].trim().to_string()
     } else {
         body.trim().to_string()

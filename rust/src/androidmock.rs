@@ -13,7 +13,7 @@ fn adb(serial: &str, args: &[&str]) -> Result<String> {
     let adb = find_bin("adb");
     let out = Command::new(&adb).arg("-s").arg(serial).args(args).output()?;
     if !out.status.success() {
-        bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).into_owned())
 }

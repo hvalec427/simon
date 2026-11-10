@@ -58,7 +58,7 @@ pub fn load_push_config() -> Result<Option<PushConfig>> {
 /// Pick the transport from an explicit override, else the config's default, else
 /// whichever block is present.
 pub fn resolve_transport(cfg: &PushConfig, override_t: Option<Transport>) -> Result<Transport> {
-    let want = override_t.or_else(|| match cfg.transport.as_deref() {
+    let want = override_t.or(match cfg.transport.as_deref() {
         Some("fcm") => Some(Transport::Fcm),
         Some("apns") => Some(Transport::Apns),
         _ => None,

@@ -112,7 +112,7 @@ fn send_to_simulator(payload: &str, ios: Option<String>, bundle_id: Option<Strin
     if !out.status.success() {
         anyhow::bail!(
             "{}\nIf the payload has no \"Simulator Target Bundle\" key, pass the app with -b <bundle-id>.",
-            String::from_utf8_lossy(&out.stderr).trim().to_string()
+            String::from_utf8_lossy(&out.stderr).trim()
         );
     }
     println!("Pushed to {}.", device.name());
