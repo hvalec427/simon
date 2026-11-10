@@ -99,6 +99,7 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMON_FEEDBACK_KEY: ${{ secrets.SIMON_FEEDBACK_KEY }}
         run: bash scripts/dev-release.sh
 
       # Scheduled/manual → date-stamped nightly prerelease from develop (custom;
@@ -107,6 +108,7 @@ jobs:
         if: github.event_name != 'push'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMON_FEEDBACK_KEY: ${{ secrets.SIMON_FEEDBACK_KEY }}
         run: bash scripts/nightly-release.sh
 
       # Rule: a stable release must only contain commits already shipped to a
@@ -136,4 +138,5 @@ jobs:
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SIMON_FEEDBACK_KEY: ${{ secrets.SIMON_FEEDBACK_KEY }}
         run: npx semantic-release

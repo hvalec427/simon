@@ -8,6 +8,20 @@ VERSION="$1"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
+# Local builds read build-time secrets (SIMON_FEEDBACK_KEY) from a gitignored
+# .env; CI passes them in the environment instead.
+if [ -f .env ]; then
+  set -a
+  # shellcheck disable=SC1091
+  . ./.env
+  set +a
+fi
+# Baked into the binary with option_env!; without it `simon feedback` only
+# works when SIMON_FEEDBACK_KEY is set at runtime.
+if [ -z "${SIMON_FEEDBACK_KEY:-}" ]; then
+  echo "Note: SIMON_FEEDBACK_KEY isn't set; this build won't have a feedback key baked in." >&2
+fi
+
 # Inline the version so the binary reports it (env!("CARGO_PKG_VERSION")).
 sed -i.bak "s/^version = .*/version = \"${VERSION}\"/" rust/Cargo.toml
 rm -f rust/Cargo.toml.bak
