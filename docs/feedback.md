@@ -31,7 +31,8 @@ names, or device details):
 | `macosVersion` | `15.1` (from `sw_vers -productVersion`) |
 | `source` | `cli` |
 
-Feedback goes to [feedbackBox](https://feedbackbox.hvalec.com), where it's triaged.
+Feedback goes to [feedbackBox](https://feedbackbox.homelab.hvalec.com), where it's triaged. It runs only on the
+homelab, so sending needs the home network or the tailnet.
 
 ## Configuration
 
@@ -41,7 +42,7 @@ override (e.g. a local build without a key, or a test server):
 | Variable | |
 |---|---|
 | `SIMON_FEEDBACK_KEY` | The feedbackBox ingest key to send with |
-| `SIMON_FEEDBACK_URL` | Base URL of the feedbackBox server (default `https://feedbackbox.hvalec.com`) |
+| `SIMON_FEEDBACK_URL` | Base URL of the feedbackBox server (default `https://feedbackbox.homelab.hvalec.com`) |
 
 For your own builds, copy `.env.example` to `.env` and fill in
 `SIMON_FEEDBACK_KEY`; `scripts/build-binaries.sh` loads it. A build without a key

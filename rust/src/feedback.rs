@@ -8,7 +8,7 @@ use serde_json::{json, Map, Value};
 use std::process::Command;
 use std::time::Duration;
 
-pub const DEFAULT_URL: &str = "https://feedbackbox.hvalec.com";
+pub const DEFAULT_URL: &str = "https://feedbackbox.homelab.hvalec.com";
 /// The ingest key baked in at build time (from `.env` locally, a repo secret in CI).
 pub const BAKED_KEY: Option<&str> = option_env!("SIMON_FEEDBACK_KEY");
 
@@ -177,7 +177,7 @@ mod tests {
 
     #[test]
     fn builds_endpoint() {
-        assert_eq!(endpoint("https://feedbackbox.hvalec.com"), "https://feedbackbox.hvalec.com/api/v1/feedback");
+        assert_eq!(endpoint("https://feedbackbox.homelab.hvalec.com"), "https://feedbackbox.homelab.hvalec.com/api/v1/feedback");
         assert_eq!(endpoint("http://localhost:3000/"), "http://localhost:3000/api/v1/feedback");
     }
 
@@ -201,12 +201,11 @@ mod tests {
 
     #[test]
     fn parses_created() {
-        let body =
-            r#"{"id":"abc","number":7,"appSlug":"simon","url":"https://feedbackbox.hvalec.com/apps/simon/feedback/7","createdAt":"2026-11-10T10:00:00Z"}"#;
+        let body = r#"{"id":"abc","number":7,"appSlug":"simon","url":"https://feedbackbox.homelab.hvalec.com/apps/simon/feedback/7","createdAt":"2026-11-10T10:00:00Z"}"#;
         let c = parse_response(201, body).unwrap();
         assert_eq!(c.number, 7);
         assert_eq!(c.app_slug, "simon");
-        assert_eq!(c.url, "https://feedbackbox.hvalec.com/apps/simon/feedback/7");
+        assert_eq!(c.url, "https://feedbackbox.homelab.hvalec.com/apps/simon/feedback/7");
     }
 
     #[test]
