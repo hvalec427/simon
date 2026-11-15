@@ -2,6 +2,7 @@ pub mod check_update;
 pub mod create;
 pub mod delete;
 pub mod doctor;
+pub mod feedback;
 pub mod launch;
 pub mod list;
 pub mod location;

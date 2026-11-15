@@ -4,7 +4,7 @@ A CLI for managing both real devices and iOS simulators / Android emulators — 
 
 Built entirely with AI (Claude).
 
-> **Companion tool:** [metroctl](https://github.com/hvalec427/metroctl) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
+> **Companion tool:** [signalbox](https://github.com/hvalec427/signalbox) — a React Native project dashboard (Metro, build/run, JS logs/network/perf) built on top of simon, in its own repo.
 
 > **macOS only.** simon ships as a signed macOS binary (Apple Silicon / Intel) and relies on macOS-only tooling (`xcrun`, `simctl`, `devicectl`). The installer and `simon update` are macOS-only; iOS features won't work elsewhere.
 
@@ -13,6 +13,9 @@ Built entirely with AI (Claude).
 ```sh
 curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/install.sh | sh
 ```
+
+It installs to `~/.simon/bin/simon` (no sudo) and adds that folder to your PATH in
+your shell config.
 
 Or grab the binary from the [latest release](https://github.com/hvalec427/simon/releases/latest). Update with `simon update`; see [Updating](docs/updating.md) for channels (stable/nightly/dev).
 
@@ -39,6 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/hvalec427/simon/master/uninstall.sh
 | `simon push <payload>` | Send a push to a simulator, or a real device with `--token` |
 | `simon tunnel [start\|stop\|status]` | Manage the iOS developer tunnel |
 | `simon doctor` | Check your environment for the required tooling |
+| `simon feedback` | Send a bug report or idea ([details](docs/feedback.md)) |
 | `simon check-update` / `simon update` | Check for / install a newer version |
 
 Run any command with `--help` for its flags.
@@ -50,22 +54,35 @@ Every device command picks its target the same way:
 - **a single device** → used automatically, no prompt
 - **no flag** → pick from a combined list of all devices
 - **`-i` / `-a`** → limit the list to iOS / Android
-- **a name** → target that device directly (on either platform — no `-i`/`-a` needed)
+- **a name or id** (or `--device <id>`) → target that device directly (on either platform — no `-i`/`-a` needed)
 
 ```sh
 simon launch                 # pick any simulator/emulator from a list
 simon launch -a              # limit the picker to Android
 simon launch "iPhone 16"     # launch that one directly, no flag needed
+simon --device Pixel_8 open-link myapp://home
 ```
+
+Every tool targets a device by the same `--device` id, the one `simon list`,
+`simon running`, `boop devices` and signalbox's Devices pane show:
+
+| Device | id |
+|---|---|
+| iOS simulator or iPhone | its udid |
+| Android emulator | its AVD name (its `emulator-5554` serial changes every boot, though that works too) |
+| Android phone | its adb serial |
+
+A device name works as well when only one device has it.
 
 ## Guides
 
 - [Logs](docs/logs.md) — native device logs
-- [RN dashboard](https://github.com/hvalec427/metroctl) — **metroctl**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
+- [RN dashboard](https://github.com/hvalec427/signalbox) — **signalbox**, a separate companion tool that runs a whole React Native project (Metro, build/run, JS logs) from one window, built on simon
 - [Push notifications](docs/push.md) — simulators and real devices (FCM / APNs)
 - [Location](docs/location.md) — simulated GPS on simulators, emulators, and real devices
 - [Physical devices](docs/physical-devices.md) — USB detection, the iOS tunnel, deep links
 - [Updating](docs/updating.md) — release channels, self-update
+- [Feedback](docs/feedback.md) — send a bug report or idea from the terminal
 
 ## Requirements
 
@@ -77,4 +94,4 @@ simon launch "iPhone 16"     # launch that one directly, no flag needed
 
 For a full React Native workflow — Metro, build/run on devices, and the JS
 logs/network/perf viewer — see the companion tool
-**[metroctl](https://github.com/hvalec427/metroctl)**, which builds on simon.
+**[signalbox](https://github.com/hvalec427/signalbox)**, which builds on simon.

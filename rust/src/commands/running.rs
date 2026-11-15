@@ -8,6 +8,6 @@ pub fn run() {
     }
     println!("Running:");
     for d in devices {
-        println!("  {}", d.label());
+        println!("  {}", super::list::with_id(d.label(), d.name(), d.id()));
     }
 }

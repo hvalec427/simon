@@ -52,15 +52,13 @@ pub fn load_push_config() -> Result<Option<PushConfig>> {
         return Ok(None);
     }
     let raw = std::fs::read_to_string(&p)?;
-    serde_json::from_str(&raw)
-        .map(Some)
-        .map_err(|_| anyhow::anyhow!("Could not parse {} — is it valid JSON?", p.display()))
+    serde_json::from_str(&raw).map(Some).map_err(|_| anyhow::anyhow!("Could not parse {} — is it valid JSON?", p.display()))
 }
 
 /// Pick the transport from an explicit override, else the config's default, else
 /// whichever block is present.
 pub fn resolve_transport(cfg: &PushConfig, override_t: Option<Transport>) -> Result<Transport> {
-    let want = override_t.or_else(|| match cfg.transport.as_deref() {
+    let want = override_t.or(match cfg.transport.as_deref() {
         Some("fcm") => Some(Transport::Fcm),
         Some("apns") => Some(Transport::Apns),
         _ => None,

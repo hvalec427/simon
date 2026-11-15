@@ -37,9 +37,7 @@ struct SimctlDevice {
 /// Turn "iOS-17-0" into "iOS 17.0": strip the SimRuntime prefix, swap dashes for
 /// spaces, then join a trailing "<major> <minor>" pair with a dot.
 fn tidy_runtime(raw: &str) -> String {
-    let spaced = raw
-        .replace("com.apple.CoreSimulator.SimRuntime.", "")
-        .replace('-', " ");
+    let spaced = raw.replace("com.apple.CoreSimulator.SimRuntime.", "").replace('-', " ");
     let parts: Vec<&str> = spaced.split_whitespace().collect();
     if parts.len() >= 3 {
         let (n2, n1) = (parts[parts.len() - 1], parts[parts.len() - 2]);
@@ -76,16 +74,61 @@ pub fn list_simulators() -> Vec<Simulator> {
 fn simctl(args: &[&str]) -> anyhow::Result<()> {
     let out = Command::new("xcrun").arg("simctl").args(args).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(())
 }
 
 pub fn boot_simulator(udid: &str) -> anyhow::Result<()> {
     // Boot may fail if it's already booted — that's fine.
-    let _ = Command::new("xcrun").args(["simctl", "boot", udid]).output();
-    let _ = Command::new("open").args(["-a", "Simulator"]).spawn();
+    let _ = Command::new("xcrun")
+        .args(["simctl", "boot", udid])
+        .output();
+    let app = simulator_app();
+    if is_device_hub(&app) {
+        // A Simulator.app left over from an older Xcode would also show it.
+        let _ = Command::new("osascript").args(["-e", QUIT_SIMULATOR_APP]).output();
+    }
+    let _ = Command::new("open")
+        .arg("-a")
+        .arg(&app)
+        .args(["--args", "-CurrentDeviceUDID", udid])
+        .spawn();
     Ok(())
+}
+
+/// The app that shows simulators for the selected Xcode (`xcode-select -p`):
+/// Device Hub from Xcode 27, Simulator.app before that. Falls back to
+/// whatever LaunchServices calls "Simulator".
+pub fn simulator_app() -> String {
+    let dev = Command::new("xcode-select")
+        .arg("-p")
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string());
+    dev.and_then(|d| simulator_app_in(std::path::Path::new(&d)))
+        .unwrap_or_else(|| "Simulator".to_string())
+}
+
+/// Whether `app` (from [`simulator_app`]) is Xcode 27's Device Hub.
+pub fn is_device_hub(app: &str) -> bool {
+    app.ends_with("/DeviceHub.app")
+}
+
+/// AppleScript that quits Simulator.app (any Xcode's) if it's running; booted
+/// simulators keep running.
+pub const QUIT_SIMULATOR_APP: &str = r#"if application id "com.apple.iphonesimulator" is running then quit application id "com.apple.iphonesimulator""#;
+
+/// Viewer app inside an Xcode `Contents/Developer` dir, if it has one.
+fn simulator_app_in(developer: &std::path::Path) -> Option<String> {
+    [
+        developer.join("../Applications/DeviceHub.app"),
+        developer.join("Applications/Simulator.app"),
+    ]
+    .into_iter()
+    .find(|p| p.is_dir())
+    .map(|p| p.canonicalize().unwrap_or(p).display().to_string())
 }
 
 pub fn shutdown_simulator(udid: &str) -> anyhow::Result<()> {
@@ -112,9 +155,7 @@ pub fn launch_app_on_simulator(udid: &str, bundle_id: &str) -> anyhow::Result<()
 /// Launch an app on a physical device by bundle id (devicectl).
 pub fn launch_app_on_physical_ios(udid: &str, bundle_id: &str) -> anyhow::Result<()> {
     ensure_devicectl()?;
-    let out = Command::new("xcrun")
-        .args(["devicectl", "device", "process", "launch", "--device", udid, bundle_id])
-        .output()?;
+    let out = Command::new("xcrun").args(["devicectl", "device", "process", "launch", "--device", udid, bundle_id]).output()?;
     if !out.status.success() {
         let detail = String::from_utf8_lossy(&out.stderr).lines().map(|l| l.trim()).find(|l| !l.is_empty()).unwrap_or("").to_string();
         anyhow::bail!("Failed to launch \"{bundle_id}\"{}", if detail.is_empty() { ".".into() } else { format!(":\n  {detail}") });
@@ -247,17 +288,14 @@ pub fn list_runtimes() -> Vec<Runtime> {
 pub fn create_simulator(name: &str, device_type: &str, runtime: &str) -> anyhow::Result<String> {
     let out = Command::new("xcrun").args(["simctl", "create", name, device_type, runtime]).output()?;
     if !out.status.success() {
-        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim().to_string());
+        anyhow::bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     Ok(String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let tmp = std::env::temp_dir().join("simon-devicectl.json");
-    let status = Command::new("xcrun")
-        .args(["devicectl", "list", "devices", "--json-output"])
-        .arg(&tmp)
-        .output();
+    let status = Command::new("xcrun").args(["devicectl", "list", "devices", "--json-output"]).arg(&tmp).output();
     if !matches!(status, Ok(ref o) if o.status.success()) {
         return Vec::new();
     }
@@ -272,19 +310,41 @@ pub fn list_physical_ios_devices() -> Vec<PhysicalIosDevice> {
     let devices = data["result"]["devices"].as_array().cloned().unwrap_or_default();
     devices
         .into_iter()
-        .filter(|d| !d["connectionProperties"]["transportType"].is_null())
+        // Xcode 27's devicectl also lists simulators ("reality": "simulated").
+        .filter(|d| !d["connectionProperties"]["transportType"].is_null() && d["hardwareProperties"]["reality"].as_str().is_none_or(|r| r == "physical"))
         .map(|d| PhysicalIosDevice {
-            name: d["deviceProperties"]["name"]
-                .as_str()
-                .or_else(|| d["hardwareProperties"]["marketingName"].as_str())
-                .unwrap_or("Unknown")
-                .to_string(),
-            udid: d["hardwareProperties"]["udid"]
-                .as_str()
-                .or_else(|| d["identifier"].as_str())
-                .unwrap_or("")
-                .to_string(),
+            name: d["deviceProperties"]["name"].as_str().or_else(|| d["hardwareProperties"]["marketingName"].as_str()).unwrap_or("Unknown").to_string(),
+            udid: d["hardwareProperties"]["udid"].as_str().or_else(|| d["identifier"].as_str()).unwrap_or("").to_string(),
             os_version: d["deviceProperties"]["osVersionNumber"].as_str().unwrap_or("").to_string(),
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::simulator_app_in;
+    use std::fs;
+
+    #[test]
+    fn prefers_device_hub_over_simulator_app() {
+        let xcode = std::env::temp_dir().join(format!("simon-xcode-{}", std::process::id()));
+        let dev = xcode.join("Contents/Developer");
+        fs::create_dir_all(dev.join("Applications/Simulator.app")).unwrap();
+        let sim = simulator_app_in(&dev).unwrap();
+        assert!(
+            sim.ends_with("Developer/Applications/Simulator.app"),
+            "{sim}"
+        );
+
+        fs::create_dir_all(xcode.join("Contents/Applications/DeviceHub.app")).unwrap();
+        let hub = simulator_app_in(&dev).unwrap();
+        assert!(
+            hub.ends_with("Contents/Applications/DeviceHub.app"),
+            "{hub}"
+        );
+        assert!(super::is_device_hub(&hub) && !super::is_device_hub(&sim));
+
+        fs::remove_dir_all(&xcode).unwrap();
+        assert_eq!(simulator_app_in(&dev), None);
+    }
 }

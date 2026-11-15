@@ -6,6 +6,9 @@ simon-darwin-arm64
 simon-darwin-x64
 .DS_Store
 
+# Local build-time secrets (see .env.example)
+.env
+
 # Android helper build artifacts (the shipped APK is committed separately)
 android/.gradle/
 android/build/

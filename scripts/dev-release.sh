@@ -7,13 +7,8 @@ set -euo pipefail
 
 REPO="hvalec427/simon"
 
-# Base = next minor above the latest stable (same scheme as nightly).
-LATEST=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
-  "https://api.github.com/repos/$REPO/releases/latest" \
-  | grep '"tag_name"' | head -1 | cut -d'"' -f4 | sed 's/^v//')
-MAJOR=$(echo "$LATEST" | cut -d. -f1)
-MINOR=$(echo "$LATEST" | cut -d. -f2)
-BASE="${MAJOR}.$((MINOR + 1)).0"
+# Base = the version the next stable release will get.
+BASE=$(bash scripts/next-version.sh)
 
 TS=$(date -u +%Y%m%d%H%M%S)
 VERSION="${BASE}-dev.${TS}"

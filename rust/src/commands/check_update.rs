@@ -37,7 +37,13 @@ pub fn run(stable: bool, nightly: bool, dev: bool) {
         Ordering::Less => {
             println!("\nThe latest {} build ({}) is older than your installed version.", channel.as_str(), latest.version);
             if stable || nightly || dev {
-                let flag = if dev { " --dev" } else if nightly { " --nightly" } else { " --stable" };
+                let flag = if dev {
+                    " --dev"
+                } else if nightly {
+                    " --nightly"
+                } else {
+                    " --stable"
+                };
                 println!("Run `simon update{flag}` to switch to the {} channel (installs {}).", channel.as_str(), latest.version);
             }
         }
@@ -45,7 +51,15 @@ pub fn run(stable: bool, nightly: bool, dev: bool) {
             if let Some(notes) = changelog_since(channel, &current) {
                 println!("\nWhat's new ({current} → {}):\n{notes}", latest.version);
             }
-            let flag = if dev { " --dev" } else if nightly { " --nightly" } else if stable { " --stable" } else { "" };
+            let flag = if dev {
+                " --dev"
+            } else if nightly {
+                " --nightly"
+            } else if stable {
+                " --stable"
+            } else {
+                ""
+            };
             println!("\nRun `simon update{flag}` to install.");
         }
     }
